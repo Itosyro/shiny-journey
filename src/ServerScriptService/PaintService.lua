@@ -105,12 +105,21 @@ local function registerStamp(player, textureInstance)
 	end
 end
 
--- Сбросить чернила на полные и стереть все мазки прошлого раунда - вызывается
--- в начале фазы пряток (Hider каждый раунд снова стартует полностью белым).
-function PaintService.ResetForNewRound(player)
+-- Стирает все мазки игрока и сбрасывает чернила на полные. Общая точка входа
+-- для двух случаев: (1) начало фазы пряток - Hider каждый раунд снова
+-- стартует полностью белым; (2) переход Hider -> Seeker в режиме Infection
+-- (см. DECISIONS.md, п.18) - пойманный не должен визуально путать остальных
+-- Seekers остатками своей маскировки.
+function PaintService.ClearAllPaint(player)
 	clearStamps(player)
 	inkData[player] = { amount = GameConfig.MAX_INK }
 	sendInkUpdate(player)
+end
+
+-- Сбросить чернила на полные и стереть все мазки прошлого раунда - вызывается
+-- в начале фазы пряток.
+function PaintService.ResetForNewRound(player)
+	PaintService.ClearAllPaint(player)
 end
 
 -- Разрешить/запретить покраску игроку (например, запрещаем во время позы - см. FreezeService)

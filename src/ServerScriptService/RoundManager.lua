@@ -8,6 +8,7 @@ local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
+local GameMode = require(ReplicatedStorage.Modules.GameMode)
 
 local RoundManager = {}
 
@@ -116,6 +117,38 @@ local function runSeekingPhase()
 	local allCaught = false
 	services.CatchService.OnAllCaught(function()
 		allCaught = true
+	end)
+
+	-- Режим Infection (по умолчанию, см. GameMode.lua и DECISIONS.md, п.18):
+	-- пойманный Hider не выбывает в Spectators, а сразу продолжает раунд как
+	-- Seeker. В режиме Classic этот обработчик ничего не делает - пойманный
+	-- просто остаётся "найденным" до конца раунда, как и раньше.
+	services.CatchService.OnCatch(function(hiderPlayer, seekerPlayer)
+		if GameMode.Current ~= GameMode.Infection then
+			return
+		end
+
+		-- Мгновенно снимаем позу и стираем маскировку (мазки кисти), чтобы
+		-- пойманный не путал остальных Seekers остатками своего "костюма"
+		services.FreezeService.ForceUnfreeze(hiderPlayer)
+		services.PaintService.ClearAllPaint(hiderPlayer)
+
+		-- Меняем команду - CatchService.TryCatch проверяет player.Team ==
+		-- Seekers, так что с этого момента новый Seeker уже может ловить
+		-- остальных без каких-либо дополнительных прав
+		services.PlayerRoleService.ConvertHiderToSeeker(hiderPlayer)
+		setWalkable(hiderPlayer, true)
+
+		-- Переносим игрока из currentHiders в currentSeekers для остатка раунда
+		-- (влияет на runRoundEnd: он получит роль "Seeker" в результатах, а не
+		-- "Hider" - что и есть honest отражение того, как он доиграл раунд)
+		for i, existingHider in ipairs(currentHiders) do
+			if existingHider == hiderPlayer then
+				table.remove(currentHiders, i)
+				break
+			end
+		end
+		table.insert(currentSeekers, hiderPlayer)
 	end)
 
 	broadcastState("Seeking", GameConfig.SEEKING_PHASE_DURATION)

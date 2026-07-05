@@ -35,7 +35,10 @@ function WhistleClient.Init(remotesFolder)
 	local root = Instance.new("Frame")
 	root.Name = "WhistlePanel"
 	root.AnchorPoint = Vector2.new(0, 1)
-	root.Position = UDim2.new(0, 12, 1, -300)
+	-- Позиция поднята выше PosePickerPanel (см. UI/PosePickerUIBuilder.lua),
+	-- которая теперь занимает всю ширину экрана там, где раньше была кнопка
+	-- заморозки (см. DECISIONS.md, п.17)
+	root.Position = UDim2.new(0, 12, 1, -380)
 	root.Size = UDim2.new(0, 160, 0, 76)
 	root.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 	root.BackgroundTransparency = 0.25

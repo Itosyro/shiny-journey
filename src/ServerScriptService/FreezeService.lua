@@ -1,13 +1,16 @@
 -- FreezeService.lua
--- Отвечает за "заморозку" (позу). Игрок останавливается на месте, включается
--- анимация позы, пока он заморожен - не может двигаться и красить
--- (см. PaintService.SetPaintingAllowed и DECISIONS.md, п.5 и п.10).
+-- Отвечает за позу (набор конкретных пресетов - см. PosePresets.lua). Игрок
+-- выбирает один из пресетов ("присесть", "лечь", "прислониться", "замереть
+-- стоя"), останавливается на месте, включается анимация именно этого пресета,
+-- пока он в позе - не может двигаться и красить
+-- (см. PaintService.SetPaintingAllowed и DECISIONS.md, п.5, п.10, п.17).
 
 local Players = game:GetService("Players")
 local Teams = game:GetService("Teams")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
+local PosePresets = require(ReplicatedStorage.Modules.PosePresets)
 -- Требуется только для проверки текущей фазы раунда (RoundManager.State).
 -- Обратной зависимости нет - RoundManager получает сервисы через Init(), а не
 -- через require(), так что цикла require здесь не образуется.
@@ -16,13 +19,35 @@ local RoundManager = require(script.Parent.RoundManager)
 local FreezeService = {}
 
 local frozenState = {} -- [Player] = true/false
--- Сохраняем исходные параметры движения игрока перед заморозкой, чтобы точно
--- вернуть их при разморозке. Раньше JumpHeight обнулялся, но не восстанавливался,
--- из-за чего на современных ригах (UseJumpPower=false) игрок больше не мог прыгать.
-local savedLocomotion = {} -- [Player] = { walkSpeed, jumpPower, jumpHeight }
+local activePose = {}  -- [Player] = поза id (например "Crouch"), только пока frozenState[player] == true
+-- Сохраняем исходные параметры движения/hitbox игрока перед заморозкой, чтобы
+-- точно вернуть их при разморозке. Раньше JumpHeight обнулялся, но не
+-- восстанавливался, из-за чего на современных ригах (UseJumpPower=false)
+-- игрок больше не мог прыгать.
+local savedLocomotion = {} -- [Player] = { walkSpeed, jumpPower, jumpHeight, hipHeight }
 local PaintServiceRef
 
-local function applyFreeze(player, wantsFreeze)
+-- Приоритет анимации позы - Action4 (максимальный, выше обычного Action),
+-- чтобы поза гарантированно перебивала вообще любую другую анимацию
+-- (ходьба/стойка/будущие анимации-жесты), а не только Movement/Idle. См.
+-- DECISIONS.md, п.17 - раньше использовался Action, теперь явный переход
+-- на Action4 как более надёжный верхний приоритет.
+local POSE_ANIMATION_PRIORITY = Enum.AnimationPriority.Action4
+
+local function stopPoseAnimations(humanoid)
+	local animator = humanoid:FindFirstChildOfClass("Animator")
+	if not animator then
+		return
+	end
+
+	for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+		if track.Priority == POSE_ANIMATION_PRIORITY then
+			track:Stop(0.2)
+		end
+	end
+end
+
+local function applyFreeze(player, wantsFreeze, poseId)
 	local character = player.Character
 	if not character then
 		return
@@ -37,12 +62,14 @@ local function applyFreeze(player, wantsFreeze)
 
 	if wantsFreeze then
 		-- Запоминаем текущие значения ровно один раз (чтобы повторный вызов freeze
-		-- не сохранил уже обнулённые значения)
+		-- - например, переключение на другую позу прямо во время заморозки - не
+		-- сохранил уже применённые/обнулённые значения)
 		if not savedLocomotion[player] then
 			savedLocomotion[player] = {
 				walkSpeed = humanoid.WalkSpeed,
 				jumpPower = humanoid.JumpPower,
 				jumpHeight = humanoid.JumpHeight,
+				hipHeight = humanoid.HipHeight,
 			}
 		end
 
@@ -50,39 +77,55 @@ local function applyFreeze(player, wantsFreeze)
 		humanoid.JumpPower = 0
 		humanoid.JumpHeight = 0
 
-		-- Проигрываем анимацию позы с высоким приоритетом, чтобы она перебивала
-		-- обычную анимацию ходьбы/стойки. POSE_ANIMATION_ID пока заглушка (см. GameConfig.lua),
-		-- поэтому оборачиваем в pcall - логика заморозки должна работать, даже если анимация не грузится.
+		-- Если игрок уже был в другой позе и сразу переключился на новую -
+		-- сначала останавливаем старую анимацию, чтобы они не проигрывались
+		-- одновременно (Animator такое позволяет, если явно не остановить).
+		stopPoseAnimations(humanoid)
+
+		activePose[player] = poseId
+
+		local preset = PosePresets.ById[poseId]
+
+		-- "Hitbox-профиль": грубая имитация физического силуэта конкретного
+		-- пресета через Humanoid.HipHeight (работает и на R6, и на R15 - это
+		-- свойство базового класса Humanoid). Множитель, а не абсолютное
+		-- значение - чтобы не ломать нестандартные по размеру аватары.
+		-- Зажимаем снизу, чтобы не уйти в 0/отрицательные значения (физические
+		-- глюки, провал под пол).
+		if preset then
+			local original = savedLocomotion[player].hipHeight
+			humanoid.HipHeight = math.max(0.05, original * preset.hipHeightMultiplier)
+		end
+
+		-- Проигрываем анимацию именно этого пресета с приоритетом Action4.
+		-- animationId пока заглушка (см. PosePresets.lua), поэтому оборачиваем
+		-- в pcall - логика заморозки должна работать, даже если анимация не грузится.
 		local animator = humanoid:FindFirstChildOfClass("Animator")
-		if animator then
+		if animator and preset then
 			local animation = Instance.new("Animation")
-			animation.AnimationId = GameConfig.POSE_ANIMATION_ID
+			animation.AnimationId = preset.animationId
 			local ok, track = pcall(function()
 				return animator:LoadAnimation(animation)
 			end)
 			if ok and track then
-				track.Priority = Enum.AnimationPriority.Action
+				track.Priority = POSE_ANIMATION_PRIORITY
 				track:Play(0.2)
 			end
 		end
 	else
-		-- Возвращаем исходные значения движения (или разумные значения по умолчанию,
-		-- если по какой-то причине ничего не сохранили)
+		-- Возвращаем исходные значения движения/hitbox (или разумные значения по
+		-- умолчанию, если по какой-то причине ничего не сохранили)
 		local saved = savedLocomotion[player]
 		humanoid.WalkSpeed = saved and saved.walkSpeed or 16
 		humanoid.JumpPower = saved and saved.jumpPower or 50
 		humanoid.JumpHeight = saved and saved.jumpHeight or 7.2
-		savedLocomotion[player] = nil
-
-		-- Останавливаем все анимации с приоритетом Action (то есть нашу позу)
-		local animator = humanoid:FindFirstChildOfClass("Animator")
-		if animator then
-			for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
-				if track.Priority == Enum.AnimationPriority.Action then
-					track:Stop(0.2)
-				end
-			end
+		if saved and saved.hipHeight then
+			humanoid.HipHeight = saved.hipHeight
 		end
+		savedLocomotion[player] = nil
+		activePose[player] = nil
+
+		stopPoseAnimations(humanoid)
 	end
 
 	if PaintServiceRef then
@@ -101,7 +144,7 @@ local function isHider(player)
 	return hidersTeam ~= nil and player.Team == hidersTeam
 end
 
-local function onRequestFreeze(player, wantsFreeze)
+local function onRequestFreeze(player, wantsFreeze, poseId)
 	if typeof(wantsFreeze) ~= "boolean" then
 		return
 	end
@@ -114,14 +157,25 @@ local function onRequestFreeze(player, wantsFreeze)
 		return -- переключать позу можно только во время фазы пряток
 	end
 
-	applyFreeze(player, wantsFreeze)
+	if wantsFreeze then
+		if typeof(poseId) ~= "string" or not PosePresets.ById[poseId] then
+			return -- запрошен несуществующий пресет позы
+		end
+	end
+
+	applyFreeze(player, wantsFreeze, poseId)
 end
 
 function FreezeService.IsFrozen(player)
 	return frozenState[player] == true
 end
 
--- Принудительно снять заморозку (например, когда раунд закончился)
+function FreezeService.GetActivePose(player)
+	return activePose[player]
+end
+
+-- Принудительно снять заморозку (например, когда раунд закончился, или Hider
+-- пойман в режиме Infection - см. DECISIONS.md, п.18)
 function FreezeService.ForceUnfreeze(player)
 	if frozenState[player] then
 		applyFreeze(player, false)
@@ -134,6 +188,7 @@ function FreezeService.Init(remotes, paintService)
 
 	Players.PlayerRemoving:Connect(function(player)
 		frozenState[player] = nil
+		activePose[player] = nil
 		savedLocomotion[player] = nil
 	end)
 end

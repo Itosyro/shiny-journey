@@ -1,66 +1,38 @@
 -- FreezeClient.lua
--- Кнопка "Заморозка/Поза" на экране. При нажатии игрок замирает, и сервер
--- включает анимацию позы (см. ServerScriptService/FreezeService.lua).
+-- Панель выбора позы на экране. При нажатии на пресет игрок замирает в нём, и
+-- сервер включает анимацию именно этого пресета (см.
+-- ServerScriptService/FreezeService.lua). Раньше здесь была одна кнопка
+-- "Заморозиться/Разморозиться" без выбора конкретной позы - см. DECISIONS.md,
+-- п.17. UI-часть (сама карусель кнопок) вынесена в UI/PosePickerUIBuilder.lua.
 
 local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
+local PosePickerUIBuilder = require(script.Parent.UI.PosePickerUIBuilder)
 
 local player = Players.LocalPlayer
 
 local FreezeClient = {}
 
-local isFrozen = false
 local currentPhase = "Lobby"
 local freezeRemote
 
--- Простой визуальный фидбек нажатия кнопки (лёгкий "щелчок" размером).
--- Настоящая анимация позы проигрывается сервером на самом персонаже
--- (см. ServerScriptService/FreezeService.lua) - здесь только фидбек на UI.
--- Примечание: масштабировать сам риг через BodyHeightScale/BodyWidthScale нельзя,
--- т.к. это работает только в R15 и сломает вид персонажей на R6 (см. GameConfig.lua,
--- список PAINTABLE_PART_NAMES поддерживает оба рига).
-local function playButtonPressFeedback(button)
-	local originalSize = button.Size
-	local shrunk = UDim2.new(originalSize.X.Scale, originalSize.X.Offset - 8, originalSize.Y.Scale, originalSize.Y.Offset - 6)
-
-	local tweenDown = TweenService:Create(button, TweenInfo.new(0.08, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), { Size = shrunk })
-	local tweenUp = TweenService:Create(button, TweenInfo.new(0.12, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = originalSize })
-
-	tweenDown:Play()
-	tweenDown.Completed:Connect(function()
-		tweenUp:Play()
-	end)
-end
-
--- Кнопка видна только Hiders и активна только в фазу пряток (Hiding) - это
+-- Панель видна только Hiders и активна только в фазу пряток (Hiding) - это
 -- клиентское зеркало серверного ограничения в FreezeService.onRequestFreeze
 -- (см. DECISIONS.md, п.13). Даже если бы кто-то обошёл клиент, сервер всё
--- равно откажет - это лишь UX, чтобы Seeker не видел бесполезную кнопку.
+-- равно откажет - это лишь UX, чтобы Seeker не видел бесполезную панель.
 local function isHider()
 	return player.Team ~= nil and player.Team.Name == GameConfig.TEAM_HIDERS_NAME
 end
 
-local function updateButtonAvailability(button)
-	local hider = isHider()
-	local canToggle = hider and currentPhase == "Hiding"
-
-	button.Visible = hider
-	button.Active = canToggle
-	button.AutoButtonColor = canToggle
-	button.BackgroundTransparency = canToggle and 0 or 0.5
-end
-
-local function toggleFreeze(button)
-	isFrozen = not isFrozen
-	freezeRemote:FireServer(isFrozen)
-
-	button.Text = isFrozen and "Разморозиться" or "Заморозиться (Поза)"
-	button.BackgroundColor3 = isFrozen and Color3.fromRGB(0, 162, 232) or Color3.fromRGB(200, 60, 60)
-
-	playButtonPressFeedback(button)
+local function updatePanelAvailability(panel)
+	-- Панель доступна ТОЛЬКО в фазе Hiding (см. требование задачи) - полностью
+	-- скрываем её в остальных фазах и для Seekers. Полное скрытие, а не просто
+	-- затемнение: Frame.Active не блокирует клики по дочерним кнопкам (в отличие
+	-- от TextButton.Active у старой одиночной кнопки), поэтому только Visible
+	-- надёжно защищает от нажатий, когда переключать позу нельзя.
+	panel.Root.Visible = isHider() and currentPhase == "Hiding"
 end
 
 function FreezeClient.Init(remotesFolder)
@@ -74,49 +46,38 @@ function FreezeClient.Init(remotesFolder)
 		screenGui.Parent = playerGui
 	end
 
-	local button = Instance.new("TextButton")
-	button.Name = "FreezeButton"
-	button.AnchorPoint = Vector2.new(1, 1)
-	-- Позиция поднята выше палитры и панели кисти, которые теперь занимают
-	-- нижнюю часть экрана по всей ширине (см. PaletteUIBuilder/BrushControlsUIBuilder)
-	button.Position = UDim2.new(1, -12, 1, -300)
-	button.Size = UDim2.new(0, 160, 0, 50)
-	button.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
-	button.TextColor3 = Color3.fromRGB(255, 255, 255)
-	button.Font = Enum.Font.GothamBold
-	button.TextScaled = true
-	button.Text = "Заморозиться (Поза)"
-	button.Parent = screenGui
+	local posePicker = PosePickerUIBuilder.Create(screenGui, {
+		OnPoseToggled = function(poseId, wantsActive)
+			freezeRemote:FireServer(wantsActive, poseId)
+		end,
+	})
 
-	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 10)
-	corner.Parent = button
-
-	button.MouseButton1Click:Connect(function()
-		toggleFreeze(button)
-	end)
-
-	-- Если персонаж возродился - сбрасываем состояние заморозки на клиенте
+	-- Если персонаж возродился - сбрасываем подсветку выбранной позы на клиенте
+	-- (сервер и так снимает реальную заморозку между раундами, см. RoundManager)
 	player.CharacterAdded:Connect(function()
-		isFrozen = false
-		button.Text = "Заморозиться (Поза)"
-		button.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
-		updateButtonAvailability(button)
+		posePicker.SetActivePose(nil)
+		updatePanelAvailability(posePicker)
 	end)
 
-	-- Следим за фазой раунда и за сменой команды, чтобы прятать/блокировать кнопку
-	-- для Seekers и вне фазы Hiding (см. isHider/updateButtonAvailability выше)
+	-- Следим за фазой раунда и за сменой команды, чтобы прятать/блокировать
+	-- панель для Seekers и вне фазы Hiding (см. isHider/updatePanelAvailability выше)
 	local roundStateRemote = remotesFolder:WaitForChild("RoundStateChanged")
 	roundStateRemote.OnClientEvent:Connect(function(state)
 		currentPhase = state
-		updateButtonAvailability(button)
+		updatePanelAvailability(posePicker)
+
+		-- Новый раунд/лобби - сбрасываем подсветку, чтобы не осталась "залипшей"
+		-- с прошлого раунда
+		if state == "Lobby" then
+			posePicker.SetActivePose(nil)
+		end
 	end)
 
 	player:GetPropertyChangedSignal("Team"):Connect(function()
-		updateButtonAvailability(button)
+		updatePanelAvailability(posePicker)
 	end)
 
-	updateButtonAvailability(button)
+	updatePanelAvailability(posePicker)
 end
 
 return FreezeClient

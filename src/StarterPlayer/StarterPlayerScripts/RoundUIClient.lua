@@ -3,7 +3,9 @@
 -- экран результатов.
 
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local GameMode = require(ReplicatedStorage.Modules.GameMode)
 local HUDBuilder = require(script.Parent.UI.HUDBuilder)
 local ResultsUIBuilder = require(script.Parent.UI.ResultsUIBuilder)
 
@@ -35,11 +37,26 @@ function RoundUIClient.Init(remotesFolder)
 	local caughtRemote = remotesFolder:WaitForChild("PlayerCaught")
 	local resultsRemote = remotesFolder:WaitForChild("RoundResults")
 
+	local currentPhase = "Lobby"
+
 	local function isLocalPlayerSeeker()
 		return player.Team ~= nil and player.Team.Name == "Seekers"
 	end
 
+	-- Вынесено в отдельную функцию и переиспользуется и при смене фазы, и при
+	-- смене команды (Team) - иначе в режиме Infection (см. DECISIONS.md, п.18)
+	-- HUD игрока, которого поймали и превратили в Seeker посреди фазы Seeking,
+	-- продолжал бы показывать устаревшую роль "Ты Прячущийся" до конца раунда.
+	local function updateRoleText()
+		if currentPhase == "Hiding" then
+			hud.SetRoleText(isLocalPlayerSeeker() and "Ты Искатель (жди в комнате)" or "Ты Прячущийся - красься!")
+		elseif currentPhase == "Seeking" then
+			hud.SetRoleText(isLocalPlayerSeeker() and "Ты Искатель - ищи всех!" or "Ты Прячущийся - замри!")
+		end
+	end
+
 	roundStateRemote.OnClientEvent:Connect(function(state, timeLeft, extra)
+		currentPhase = state
 		hud.SetPhaseText(PHASE_NAMES_RU[state] or state)
 		hud.SetTimerSeconds(timeLeft or 0)
 
@@ -49,10 +66,10 @@ function RoundUIClient.Init(remotesFolder)
 			hud.SetFoundText("")
 		elseif state == "Hiding" then
 			resultsUI.Hide()
-			hud.SetRoleText(isLocalPlayerSeeker() and "Ты Искатель (жди в комнате)" or "Ты Прячущийся - красься!")
+			updateRoleText()
 			hud.SetFoundText("")
 		elseif state == "Seeking" then
-			hud.SetRoleText(isLocalPlayerSeeker() and "Ты Искатель - ищи всех!" or "Ты Прячущийся - замри!")
+			updateRoleText()
 		elseif state == "RoundEnd" then
 			if extra and extra.results then
 				resultsUI.Show(extra.results)
@@ -60,12 +77,22 @@ function RoundUIClient.Init(remotesFolder)
 		end
 	end)
 
+	-- В режиме Infection роль игрока может смениться прямо во время фазы
+	-- Seeking (пойманный Hider становится Seeker) - подхватываем это здесь.
+	player:GetPropertyChangedSignal("Team"):Connect(updateRoleText)
+
 	timerRemote.OnClientEvent:Connect(function(timeLeft)
 		hud.SetTimerSeconds(timeLeft)
 	end)
 
 	caughtRemote.OnClientEvent:Connect(function(hiderName, seekerName, remainingCount)
-		hud.SetFoundText(string.format("Найден: %s (искателем %s). Осталось: %d", hiderName, seekerName, remainingCount))
+		if hiderName == player.Name and GameMode.Current == GameMode.Infection then
+			-- Личное уведомление тому, кого только что поймали - роль сменилась
+			-- незаметно (без перезахода/лобби), стоит явно объяснить, что произошло.
+			hud.SetFoundText("Тебя поймали! Теперь ты Искатель - лови остальных!")
+		else
+			hud.SetFoundText(string.format("Найден: %s (искателем %s). Осталось: %d", hiderName, seekerName, remainingCount))
+		end
 	end)
 
 	resultsRemote.OnClientEvent:Connect(function(results)

@@ -3,9 +3,10 @@
 Документ описывает **реальную текущую** архитектуру проекта (как оно есть в
 коде на ветке `claude/meccha-chameleon-roblox-jvepyg`), а не идеальный план.
 Составлен в ходе ревью Opus (2026-07-05), обновлён после внедрения фиксов из
-аудита (line-of-sight поимка, скрытие подсказок от Hiders, гейтинг позы) и
-после пересмотра механики покраски на рисование кистью + добавления свистка
-(оба — 2026-07-05). Обновлять при изменении контрактов (RemoteEvents,
+аудита (line-of-sight поимка, скрытие подсказок от Hiders, гейтинг позы),
+после пересмотра механики покраски на рисование кистью + добавления свистка,
+и после пересмотра позы на конкретные пресеты + добавления режима Infection
+(все — 2026-07-05). Обновлять при изменении контрактов (RemoteEvents,
 состояние игрока, фазы раунда).
 
 ## Общая схема
@@ -18,20 +19,31 @@
 ------------------------------             ----------------------------
 Main.client ─ инициализирует:              Main.server ─ инициализирует:
   PaintClient   ──PaintStroke───────────►    PaintService ──require──► RoundManager (для проверки фазы)
-  FreezeClient  ──RequestFreeze─────────►    FreezeService ──require──► RoundManager (для проверки фазы)
-  RoundUIClient ◄─RoundStateChanged─────     RoundManager  (главный автомат)
+  FreezeClient  ──RequestFreeze(pose)───►    FreezeService ──require──► RoundManager (для проверки фазы)
+  RoundUIClient ◄─RoundStateChanged─────     RoundManager  (главный автомат, требует GameMode)
                 ◄─RoundTimerTick───────      PlayerRoleService
                 ◄─PlayerCaught────────       CatchService (ProximityPrompt + серверные
-  CatchClient   ◄─HideCatchPromptsFromHiders  дистанция/line-of-sight проверки)
-  PaintClient   ◄─InkUpdate─────────────      PaintService (мазки-Texture, см. DECISIONS 14)
+  CatchClient   ◄─HideCatchPromptsFromHiders  дистанция/line-of-sight проверки; OnCatch-хук
+  PaintClient   ◄─InkUpdate─────────────      для перехода роли в Infection, см. DECISIONS 18)
   WhistleClient ──RequestWhistle────────►    WhistleService (Sound + RollOff, см. DECISIONS 15)
   WhistleClient ◄─WhistleCountdownUpdate      ScoreService
 ```
 
-Общий модуль `ReplicatedStorage/Modules/BrushGeometry.lua` используется и
-клиентом (`PaintClient`, чтобы понять, куда мазнул игрок), и сервером
-(`PaintService`, чтобы честно разместить мазок по присланным координатам) —
-единая математика face/UV, без дублирования и риска рассинхронизации.
+Общие модули `ReplicatedStorage/Modules/`:
+- `BrushGeometry.lua` — используется и клиентом (`PaintClient`, чтобы понять,
+  куда мазнул игрок), и сервером (`PaintService`, чтобы честно разместить
+  мазок по присланным координатам) — единая математика face/UV, без
+  дублирования и риска рассинхронизации.
+- `PosePresets.lua` — список из 4 пресетов позы (id/label/animationId/
+  hipHeightMultiplier), используется клиентом (`PosePickerUIBuilder`, чтобы
+  построить карусель кнопок) и сервером (`FreezeService`, чтобы
+  провалидировать присланный `poseId` и применить анимацию/hitbox). См.
+  `DECISIONS.md`, п.17.
+- `GameMode.lua` — константа активного режима (`Classic`/`Infection`),
+  читается сервером (`RoundManager`, чтобы решить, что делать при поимке) и
+  может читаться клиентом (например, для формулировки сообщений). См.
+  `DECISIONS.md`, п.18 — там же важный нюанс: это статическая настройка,
+  переключаемая только правкой кода, а не в реальном времени.
 
 ## RemoteEvents
 
@@ -41,7 +53,7 @@ Main.client ─ инициализирует:              Main.server ─ ин�
 | Событие | Направление | Параметры | Описание |
 |---|---|---|---|
 | `PaintStroke` | клиент → сервер | `points: {{partName: string, face: Enum.NormalId, u: number, v: number}}`, `color: Color3`, `brushSize: number` | Пакет точек мазка кисти, отправляется раз в ~0.15с при рисовании (не по одной точке за раз). Сервер валидирует роль/фазу/заморозку/чернила и сам создаёт `Texture`-мазки, см. `DECISIONS.md`, п.14. |
-| `RequestFreeze` | клиент → сервер | `wantsFreeze: boolean` | Запрос встать в позу / выйти из позы. |
+| `RequestFreeze` | клиент → сервер | `wantsFreeze: boolean`, `poseId: string?` | Запрос встать в конкретный пресет позы / выйти из позы. `poseId` обязателен и валидируется сервером (`PosePresets.ById`), когда `wantsFreeze = true`; при выключении не используется. См. `DECISIONS.md`, п.17. |
 | `RoundStateChanged` | сервер → все клиенты | `state: string`, `timeLeft: number`, `extra: table` | Смена фазы. `state` ∈ {Lobby, Hiding, Seeking, RoundEnd}. `extra` может содержать `results`, `playersNeeded`, `playersCurrent`. |
 | `RoundTimerTick` | сервер → все клиенты | `remaining: number` | Тик таймера текущей фазы (раз в секунду). |
 | `PlayerCaught` | сервер → все клиенты | `hiderName: string`, `seekerName: string`, `remaining: number` | Кого-то поймали + сколько осталось. |
@@ -71,7 +83,8 @@ RemoteFunctions в проекте **не используются** (всё по
 | `PaintService` | `activeStamps[player] = { Texture, ... }` | очередь мазков игрока (FIFO), старые вытесняются по `MAX_ACTIVE_STAMPS_PER_PLAYER` |
 | `PaintService` | `paintingBlocked[player] = bool` | запрещена ли покраска (поза / фаза поиска) |
 | `FreezeService` | `frozenState[player] = bool` | стоит ли игрок в позе |
-| `FreezeService` | `savedLocomotion[player] = {walkSpeed, jumpPower, jumpHeight}` | исходные параметры движения, чтобы вернуть после позы |
+| `FreezeService` | `activePose[player] = string` | id текущего пресета позы (например `"Crouch"`), только пока `frozenState[player] == true` |
+| `FreezeService` | `savedLocomotion[player] = {walkSpeed, jumpPower, jumpHeight, hipHeight}` | исходные параметры движения и "hitbox-профиля" (`HipHeight`), чтобы вернуть после позы |
 | `CatchService` | `foundState[player] = bool` | найден ли этот Hider (только участники текущего раунда) |
 | `CatchService` | `activePrompts[player] = ProximityPrompt` | висящий на игроке промпт поимки (`ActionText = "Поймать"`, без имени, `RequiresLineOfSight = true`) |
 | `ScoreService` | `totalScores[player] = number` | очки за всю сессию сервера |
@@ -101,6 +114,8 @@ RemoteFunctions в проекте **не используются** (всё по
      • Seekers → SeekerWaitingRoom, WalkSpeed=0       │
      • Hiders: чернила и мазки прошлого раунда стёрты  │
        (PaintService.ResetForNewRound), рисование разрешено│
+     • Hiders выбирают один из 4 пресетов позы (Crouch/ │
+       LieDown/Lean/StandStill) - см. DECISIONS 17     │
         │                                             │
         ▼                                             │
   [ Seeking ]  SEEKING_PHASE_DURATION сек             │
@@ -110,7 +125,11 @@ RemoteFunctions в проекте **не используются** (всё по
        Seekers, требуют line-of-sight - см. DECISIONS 12)│
      • у каждого Hider тикает таймер свистка - авто через │
        WHISTLE_AUTO_INTERVAL_SECONDS или вручную (DECISIONS 15)│
-     • досрочный выход, если пойманы все (OnAllCaught)│
+     • при поимке (CatchService.OnCatch): если GameMode  │
+       == Infection - пойманный мгновенно снимает позу/ │
+       покраску и становится Seeker "на лету" (DECISIONS 18)│
+     • досрочный выход, если пойманы все (OnAllCaught -  │
+       не зависит от режима, см. DECISIONS 18)          │
         │                                             │
         ▼                                             │
   [ RoundEnd ]  ROUND_END_DISPLAY_DURATION сек        │
@@ -150,9 +169,33 @@ RemoteFunctions в проекте **не используются** (всё по
   калибровку (насколько естественно ложатся мазки на реальных R6/R15 моделях)
   нужно провести в живом тесте Studio — см. `TASKS.md`.
 - `GameConfig.BRUSH_STAMP_IMAGE_ID` и `GameConfig.WHISTLE_SOUND_ID` — заглушки
-  `rbxassetid://0`, как и `POSE_ANIMATION_ID` (см. `DECISIONS.md`, п.10/14/15).
-  Игра не упадёт: присвоение невалидного `AssetId` свойству `Texture.Texture`/
+  `rbxassetid://0`, тем же паттерном, что раньше был у `POSE_ANIMATION_ID`
+  (см. `DECISIONS.md`, п.10/14/15) — сейчас у каждого пресета позы свой
+  `animationId`-заглушка в `PosePresets.lua`, см. следующий пункт. Игра не
+  упадёт: присвоение невалидного `AssetId` свойству `Texture.Texture`/
   `Sound.SoundId` само по себе не бросает ошибку в Luau (в отличие от
   `Animator:LoadAnimation`, которую пришлось оборачивать в `pcall` — см. п.10),
   но мазки будут невидимы, а свисток — беззвучен, пока ассеты не загружены в
   Studio и ID не подставлены в `GameConfig.lua`.
+- Все 4 `animationId` в `PosePresets.lua` — тоже заглушки `rbxassetid://0`,
+  требуют 4 отдельные финальные анимации (см. `TASKS.md`).
+- "Hitbox-профиль" поз реализован только через `Humanoid.HipHeight`
+  (множитель от исходного значения), а не через реальную подмену формы
+  коллизии — сознательное упрощение (см. `DECISIONS.md`, п.17), визуальный
+  эффект нужно откалибровать в живом тесте, особенно для R6.
+- Пресет "Lean" (прислониться) не делает raycast для поиска ближайшей стены и
+  не ориентирует/не примагничивает персонажа к поверхности — чисто
+  тематическая поза той же сложности, что и остальные три (см. `DECISIONS.md`,
+  п.17). Настоящее физическое прилипание к стене — отдельная будущая задача.
+- `GameMode.Current` — статическая константа, читаемая независимо клиентом и
+  сервером через `require`. Работает, только пока значение не меняется в
+  реальном времени после старта сервера. Если в будущем добавится
+  лобби-настройка с переключением режима "на лету", потребуется отдельный
+  `RemoteEvent`, чтобы сообщить клиентам актуальный режим — простая мутация
+  `GameMode.Current` на сервере клиентам не реплицируется (см. `DECISIONS.md`,
+  п.18).
+- В режиме `Infection` `currentHiders`/`currentSeekers` в `RoundManager`
+  мутируются в процессе раунда (`table.remove`/`table.insert` при переходе
+  роли) — это осознанное отступление от прежнего инварианта "списки
+  фиксируются на старте раунда" (см. пункт выше про вход новых игроков), но
+  затрагивает только существующих участников раунда, не новых игроков.

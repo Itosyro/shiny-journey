@@ -65,9 +65,9 @@ GameConfig.PAINTABLE_PART_NAMES = {
 	"RightUpperLeg", "RightLowerLeg", "RightFoot", "Right Leg",
 }
 
--- === Заморозка / поза ===
--- ЗАГЛУШКА! Замени на реальный Animation ID позы, когда анимация будет загружена в Studio.
-GameConfig.POSE_ANIMATION_ID = "rbxassetid://0"
+-- Заморозка / поза: см. ReplicatedStorage/Modules/PosePresets.lua - у каждого
+-- из 4 пресетов свой animationId, поэтому единой GameConfig.POSE_ANIMATION_ID
+-- больше нет (см. DECISIONS.md, п.17).
 
 -- === Свисток (Whistle) - см. DECISIONS.md, п.15 ===
 GameConfig.WHISTLE_AUTO_INTERVAL_SECONDS = 45 -- через сколько секунд молчания срабатывает автосвисток

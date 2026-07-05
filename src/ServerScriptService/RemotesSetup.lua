@@ -11,7 +11,7 @@ local RemotesSetup = {}
 -- Список всех RemoteEvent, которые использует игра.
 local REMOTE_EVENT_NAMES = {
 	"PaintStroke",        -- клиент -> сервер: пакет точек мазка кисти (см. DECISIONS.md, п.14)
-	"RequestFreeze",      -- клиент -> сервер: включить/выключить позу (заморозку)
+	"RequestFreeze",      -- клиент -> сервер: включить/выключить позу (заморозку); при включении несёт id пресета позы (см. PosePresets.lua, DECISIONS.md п.17)
 	"RoundStateChanged",  -- сервер -> клиент: началась новая фаза раунда
 	"RoundTimerTick",     -- сервер -> клиент: обновление таймера каждую секунду
 	"PlayerCaught",       -- сервер -> клиент: игрока поймали

@@ -78,4 +78,13 @@ function PlayerRoleService.SetSpectator(player)
 	player.Team = spectatorsTeam
 end
 
+-- Переводит пойманного Hider в команду Seekers "на лету", посреди раунда -
+-- режим Infection (см. GameMode.lua и DECISIONS.md, п.18). В отличие от
+-- AssignRoles, это не пересчёт ролей у всех игроков, а точечный перевод
+-- одного конкретного игрока; список currentHiders/currentSeekers в
+-- RoundManager обновляется отдельно, см. RoundManager.lua.
+function PlayerRoleService.ConvertHiderToSeeker(player)
+	player.Team = seekersTeam
+end
+
 return PlayerRoleService

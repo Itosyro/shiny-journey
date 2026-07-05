@@ -19,6 +19,7 @@ local foundState = {}    -- [Player] = true/false
 local remotesRef
 local ScoreServiceRef
 local onAllCaughtCallback
+local onCatchCallback
 
 local function attachPromptToHider(hiderPlayer)
 	local character = hiderPlayer.Character
@@ -93,6 +94,7 @@ function CatchService.EndRound()
 	activePrompts = {}
 	foundState = {}
 	onAllCaughtCallback = nil
+	onCatchCallback = nil
 end
 
 function CatchService.CountRemaining()
@@ -197,6 +199,14 @@ function CatchService.TryCatch(seekerPlayer, hiderPlayer)
 		remotesRef.PlayerCaught:FireAllClients(hiderPlayer.Name, seekerPlayer.Name, CatchService.CountRemaining())
 	end
 
+	-- Даёт RoundManager шанс отреагировать на конкретную поимку (например,
+	-- перевести пойманного в Seekers в режиме Infection - см. DECISIONS.md,
+	-- п.18) ДО проверки "все ли найдены", чтобы переход роли гарантированно
+	-- успел примениться, даже если это была поимка последнего Hider.
+	if onCatchCallback then
+		onCatchCallback(hiderPlayer, seekerPlayer)
+	end
+
 	if CatchService.CountRemaining() <= 0 and onAllCaughtCallback then
 		onAllCaughtCallback()
 	end
@@ -205,6 +215,11 @@ end
 -- Регистрирует функцию, которая вызовется, когда найдены все Hiders (для досрочного завершения раунда)
 function CatchService.OnAllCaught(callback)
 	onAllCaughtCallback = callback
+end
+
+-- Регистрирует функцию, которая вызовется при КАЖДОЙ поимке с (hiderPlayer, seekerPlayer)
+function CatchService.OnCatch(callback)
+	onCatchCallback = callback
 end
 
 -- Если прячущийся вышел из игры посреди фазы поиска - убираем его из подсчёта,
