@@ -77,7 +77,9 @@ function FreezeClient.Init(remotesFolder)
 	local button = Instance.new("TextButton")
 	button.Name = "FreezeButton"
 	button.AnchorPoint = Vector2.new(1, 1)
-	button.Position = UDim2.new(1, -12, 1, -190)
+	-- Позиция поднята выше палитры и панели кисти, которые теперь занимают
+	-- нижнюю часть экрана по всей ширине (см. PaletteUIBuilder/BrushControlsUIBuilder)
+	button.Position = UDim2.new(1, -12, 1, -300)
 	button.Size = UDim2.new(0, 160, 0, 50)
 	button.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
 	button.TextColor3 = Color3.fromRGB(255, 255, 255)

@@ -1,25 +1,48 @@
 -- PaintService.lua
--- Проверяет и применяет покраску частей тела персонажа.
--- Сервер главный (см. DECISIONS.md, п.1): клиент только предлагает цвет и часть
--- тела, а сервер решает, разрешено ли это, и меняет реальный цвет BasePart.Color.
--- Roblox сам разошлёт этот цвет всем остальным игрокам (см. DECISIONS.md, п.2).
+-- Проверяет и применяет "мазки" кисти на теле персонажа. Раньше покраска была
+-- кнопками "выбрать часть тела -> залить целиком"; после дополнительного
+-- изучения референса механика переписана на свободное рисование кистью -
+-- см. DECISIONS.md, п.14 (там же обоснование выбора технологии: Texture-мазки
+-- вместо EditableImage).
+--
+-- Сервер главный (см. DECISIONS.md, п.1): клиент присылает ПАКЕТ точек мазка
+-- (не по одной точке за раз - это создало бы лишнюю нагрузку, см. DECISIONS.md,
+-- п.14), а сервер проверяет роль/фазу/заморозку/чернила и сам создаёт Texture-
+-- инстансы на персонаже. Roblox сам разошлёт их всем остальным игрокам
+-- (см. DECISIONS.md, п.2 - тот же принцип, что и раньше для Color3).
 
 local Players = game:GetService("Players")
+local Teams = game:GetService("Teams")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
+local BrushGeometry = require(ReplicatedStorage.Modules.BrushGeometry)
+-- Только для проверки текущей фазы раунда (RoundManager.State), см. FreezeService.lua
+-- - там же комментарий, почему это не создаёт цикл require.
+local RoundManager = require(script.Parent.RoundManager)
 
 local PaintService = {}
 
--- Заряды краски у каждого игрока: [Player] = { charges = число }
-local brushData = {}
+-- "Чернила" игрока: [Player] = { amount = число от 0 до GameConfig.MAX_INK }
+local inkData = {}
 
--- Заблокирована ли покраска у игрока прямо сейчас (например, он в позе)
+-- Активные мазки-Texture каждого игрока, от старых к новым (FIFO), чтобы не
+-- копить бесконечное число инстансов за долгую игровую сессию - см. GameConfig.
+-- MAX_ACTIVE_STAMPS_PER_PLAYER.
+local activeStamps = {}
+
+-- Заблокирована ли покраска у игрока прямо сейчас (например, он в позе) -
+-- управляется через FreezeService.SetPaintingAllowed (переиспользуем как есть).
 local paintingBlocked = {}
 
 local paintableLookup = {}
 for _, name in ipairs(GameConfig.PAINTABLE_PART_NAMES) do
 	paintableLookup[name] = true
+end
+
+local validFaces = {}
+for _, face in ipairs(BrushGeometry.ValidFaces) do
+	validFaces[face] = true
 end
 
 local remotesRef
@@ -28,30 +51,66 @@ local function clamp01(n)
 	return math.clamp(n, 0, 1)
 end
 
-local function sendChargesUpdate(player)
-	local data = brushData[player]
+local function isHider(player)
+	local hidersTeam = Teams:FindFirstChild(GameConfig.TEAM_HIDERS_NAME)
+	return hidersTeam ~= nil and player.Team == hidersTeam
+end
+
+local function sendInkUpdate(player)
+	local data = inkData[player]
 	if data and remotesRef then
-		remotesRef.BrushChargesUpdate:FireClient(player, data.charges, GameConfig.MAX_BRUSH_CHARGES)
+		remotesRef.InkUpdate:FireClient(player, data.amount, GameConfig.MAX_INK)
 	end
 end
 
--- Фоновый цикл восстановления зарядов краски со временем
+-- Фоновый цикл восстановления чернил со временем (раз в секунду, небольшими шагами)
 local function rechargeLoop()
 	while true do
-		task.wait(GameConfig.BRUSH_RECHARGE_SECONDS)
-		for player, data in pairs(brushData) do
-			if data.charges < GameConfig.MAX_BRUSH_CHARGES then
-				data.charges += 1
-				sendChargesUpdate(player)
+		task.wait(1)
+		for player, data in pairs(inkData) do
+			if data.amount < GameConfig.MAX_INK then
+				data.amount = math.min(GameConfig.MAX_INK, data.amount + GameConfig.INK_REGEN_PER_SECOND)
+				sendInkUpdate(player)
 			end
 		end
 	end
 end
 
--- Сбросить заряды на полные - вызывается в начале фазы пряток
-function PaintService.ResetCharges(player)
-	brushData[player] = { charges = GameConfig.MAX_BRUSH_CHARGES }
-	sendChargesUpdate(player)
+local function clearStamps(player)
+	local queue = activeStamps[player]
+	if queue then
+		for _, stamp in ipairs(queue) do
+			stamp:Destroy()
+		end
+	end
+	activeStamps[player] = nil
+end
+
+-- Добавляет мазок в очередь игрока; если превышен лимит - стирает самый старый,
+-- чтобы количество инстансов на персонаже не росло бесконечно за долгую сессию.
+local function registerStamp(player, textureInstance)
+	local queue = activeStamps[player]
+	if not queue then
+		queue = {}
+		activeStamps[player] = queue
+	end
+
+	table.insert(queue, textureInstance)
+
+	if #queue > GameConfig.MAX_ACTIVE_STAMPS_PER_PLAYER then
+		local oldest = table.remove(queue, 1)
+		if oldest then
+			oldest:Destroy()
+		end
+	end
+end
+
+-- Сбросить чернила на полные и стереть все мазки прошлого раунда - вызывается
+-- в начале фазы пряток (Hider каждый раунд снова стартует полностью белым).
+function PaintService.ResetForNewRound(player)
+	clearStamps(player)
+	inkData[player] = { amount = GameConfig.MAX_INK }
+	sendInkUpdate(player)
 end
 
 -- Разрешить/запретить покраску игроку (например, запрещаем во время позы - см. FreezeService)
@@ -63,23 +122,46 @@ local function isPaintingBlocked(player)
 	return paintingBlocked[player] == true
 end
 
-local function onPaintCharacter(player, partName, color)
-	-- Проверка типов входных данных, чтобы никто не сломал сервер левыми аргументами
-	if typeof(partName) ~= "string" or typeof(color) ~= "Color3" then
+local function applyStamp(player, part, face, u, v, color, size)
+	local texture = Instance.new("Texture")
+	texture.Name = "BrushStamp"
+	texture.Texture = GameConfig.BRUSH_STAMP_IMAGE_ID
+	texture.Face = face
+	texture.Color3 = color
+
+	texture.StudsPerTileU = size
+	texture.StudsPerTileV = size
+
+	local offsetU, offsetV = BrushGeometry.UVToOffset(part, face, u, v, size)
+	texture.OffsetStudsU = offsetU
+	texture.OffsetStudsV = offsetV
+
+	texture.Parent = part
+
+	registerStamp(player, texture)
+end
+
+-- points: массив { partName: string, face: Enum.NormalId, u: number, v: number }
+-- Клиент шлёт пакет точек раз в ~0.15с (не по одной точке за раз), см. DECISIONS.md, п.14.
+local function onPaintStroke(player, points, brushColor, brushSize)
+	if typeof(points) ~= "table" or typeof(brushColor) ~= "Color3" or typeof(brushSize) ~= "number" then
 		return
 	end
 
-	if not paintableLookup[partName] then
-		return -- часть тела не входит в разрешённый список
+	if not isHider(player) then
+		return -- красить может только Hider
+	end
+
+	if RoundManager.State ~= "Hiding" then
+		return -- красить можно только в фазу пряток
 	end
 
 	if isPaintingBlocked(player) then
-		return -- игрок сейчас в позе или в фазе поиска - красить нельзя
+		return -- заморожен (в позе) - красить нельзя
 	end
 
-	local data = brushData[player]
-	if not data or data.charges <= 0 then
-		return -- нет зарядов краски
+	if #points > GameConfig.MAX_STROKE_POINTS_PER_BATCH then
+		return -- подозрительно большой пакет - отклоняем целиком, не тратя чернила
 	end
 
 	local character = player.Character
@@ -87,27 +169,50 @@ local function onPaintCharacter(player, partName, color)
 		return
 	end
 
-	local part = character:FindFirstChild(partName)
-	if not part or not part:IsA("BasePart") then
+	local ink = inkData[player]
+	if not ink then
 		return
 	end
 
-	-- Защита от левых цветов: пересобираем Color3 из чисел 0-1, чтобы отбросить возможный мусор
-	local safeColor = Color3.new(clamp01(color.R), clamp01(color.G), clamp01(color.B))
+	local size = math.clamp(brushSize, GameConfig.MIN_BRUSH_SIZE, GameConfig.MAX_BRUSH_SIZE)
+	local safeColor = Color3.new(clamp01(brushColor.R), clamp01(brushColor.G), clamp01(brushColor.B))
+	-- Чем крупнее кисть, тем дороже мазок - пропорционально площади (size в квадрате)
+	local costPerStamp = GameConfig.INK_COST_PER_STAMP * (size / GameConfig.MIN_BRUSH_SIZE) ^ 2
 
-	part.Color = safeColor
+	for _, point in ipairs(points) do
+		if ink.amount < costPerStamp then
+			break -- чернила кончились - молча останавливаемся, уже нанесённые мазки не отменяем
+		end
 
-	data.charges -= 1
-	sendChargesUpdate(player)
+		if
+			typeof(point) == "table"
+			and typeof(point.partName) == "string"
+			and typeof(point.u) == "number"
+			and typeof(point.v) == "number"
+			and validFaces[point.face]
+			and paintableLookup[point.partName]
+		then
+			local part = character:FindFirstChild(point.partName)
+			if part and part:IsA("BasePart") then
+				local u = math.clamp(point.u, 0, 1)
+				local v = math.clamp(point.v, 0, 1)
+				applyStamp(player, part, point.face, u, v, safeColor, size)
+				ink.amount -= costPerStamp
+			end
+		end
+	end
+
+	sendInkUpdate(player)
 end
 
 function PaintService.Init(remotes)
 	remotesRef = remotes
-	remotes.PaintCharacter.OnServerEvent:Connect(onPaintCharacter)
+	remotes.PaintStroke.OnServerEvent:Connect(onPaintStroke)
 
 	Players.PlayerRemoving:Connect(function(player)
-		brushData[player] = nil
+		inkData[player] = nil
 		paintingBlocked[player] = nil
+		activeStamps[player] = nil -- сами инстансы Texture уничтожатся вместе с персонажем
 	end)
 
 	task.spawn(rechargeLoop)

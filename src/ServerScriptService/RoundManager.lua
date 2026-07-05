@@ -14,7 +14,7 @@ local RoundManager = {}
 RoundManager.State = "Lobby" -- Lobby | Hiding | Seeking | RoundEnd
 
 local remotesRef
-local services -- {PlayerRoleService, PaintService, FreezeService, CatchService, ScoreService}
+local services -- {PlayerRoleService, PaintService, FreezeService, CatchService, ScoreService, WhistleService}
 
 local currentHiders = {}
 local currentSeekers = {}
@@ -88,9 +88,10 @@ local function runHidingPhase()
 		setWalkable(seeker, false)
 	end
 
-	-- Прячущимся сбрасываем краску и разрешаем красить/двигаться
+	-- Прячущимся сбрасываем краску (стираем мазки прошлого раунда) и разрешаем
+	-- красить/двигаться
 	for _, hider in ipairs(currentHiders) do
-		services.PaintService.ResetCharges(hider)
+		services.PaintService.ResetForNewRound(hider)
 		services.PaintService.SetPaintingAllowed(hider, true)
 	end
 
@@ -110,6 +111,7 @@ local function runSeekingPhase()
 
 	services.ScoreService.StartRoundTracking(currentHiders, currentSeekers)
 	services.CatchService.StartSeekingPhase(currentHiders)
+	services.WhistleService.StartSeekingPhase(currentHiders)
 
 	local allCaught = false
 	services.CatchService.OnAllCaught(function()
@@ -137,6 +139,7 @@ local function runRoundEnd()
 
 	local results = services.ScoreService.BuildRoundResults(currentHiders, currentSeekers)
 	services.CatchService.EndRound()
+	services.WhistleService.EndRound()
 
 	broadcastState("RoundEnd", GameConfig.ROUND_END_DISPLAY_DURATION, { results = results })
 	remotesRef.RoundResults:FireAllClients(results)
@@ -174,6 +177,7 @@ local function gameLoop()
 			if not ok then
 				warn("[MecchaChameleon] Ошибка в раунде, сбрасываю в лобби: " .. tostring(err))
 				services.CatchService.EndRound()
+				services.WhistleService.EndRound()
 				for _, player in ipairs(getAvailablePlayers()) do
 					services.FreezeService.ForceUnfreeze(player)
 					services.PlayerRoleService.SetSpectator(player)

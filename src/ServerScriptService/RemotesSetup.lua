@@ -10,14 +10,16 @@ local RemotesSetup = {}
 
 -- Список всех RemoteEvent, которые использует игра.
 local REMOTE_EVENT_NAMES = {
-	"PaintCharacter",     -- клиент -> сервер: покрасить часть тела в цвет
+	"PaintStroke",        -- клиент -> сервер: пакет точек мазка кисти (см. DECISIONS.md, п.14)
 	"RequestFreeze",      -- клиент -> сервер: включить/выключить позу (заморозку)
 	"RoundStateChanged",  -- сервер -> клиент: началась новая фаза раунда
 	"RoundTimerTick",     -- сервер -> клиент: обновление таймера каждую секунду
 	"PlayerCaught",       -- сервер -> клиент: игрока поймали
 	"RoundResults",       -- сервер -> клиент: итоги раунда (очки)
-	"BrushChargesUpdate", -- сервер -> клиент: обновление количества зарядов краски
+	"InkUpdate",          -- сервер -> клиент: обновление количества "чернил" кисти
 	"HideCatchPromptsFromHiders", -- сервер -> клиент (только Hiders): локально скрыть подсказки "Поймать"
+	"RequestWhistle",         -- клиент -> сервер: свистнуть прямо сейчас (см. DECISIONS.md, п.15)
+	"WhistleCountdownUpdate", -- сервер -> клиент (только Hiders): секунд до следующего свистка
 }
 
 function RemotesSetup.Init()

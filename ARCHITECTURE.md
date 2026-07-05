@@ -3,9 +3,10 @@
 Документ описывает **реальную текущую** архитектуру проекта (как оно есть в
 коде на ветке `claude/meccha-chameleon-roblox-jvepyg`), а не идеальный план.
 Составлен в ходе ревью Opus (2026-07-05), обновлён после внедрения фиксов из
-аудита (line-of-sight поимка, скрытие подсказок от Hiders, гейтинг позы —
-2026-07-05). Обновлять при изменении контрактов (RemoteEvents, состояние
-игрока, фазы раунда).
+аудита (line-of-sight поимка, скрытие подсказок от Hiders, гейтинг позы) и
+после пересмотра механики покраски на рисование кистью + добавления свистка
+(оба — 2026-07-05). Обновлять при изменении контрактов (RemoteEvents,
+состояние игрока, фазы раунда).
 
 ## Общая схема
 
@@ -16,15 +17,21 @@
 КЛИЕНТ (StarterPlayerScripts)              СЕРВЕР (ServerScriptService)
 ------------------------------             ----------------------------
 Main.client ─ инициализирует:              Main.server ─ инициализирует:
-  PaintClient   ──PaintCharacter────────►    PaintService
+  PaintClient   ──PaintStroke───────────►    PaintService ──require──► RoundManager (для проверки фазы)
   FreezeClient  ──RequestFreeze─────────►    FreezeService ──require──► RoundManager (для проверки фазы)
   RoundUIClient ◄─RoundStateChanged─────     RoundManager  (главный автомат)
                 ◄─RoundTimerTick───────      PlayerRoleService
                 ◄─PlayerCaught────────       CatchService (ProximityPrompt + серверные
   CatchClient   ◄─HideCatchPromptsFromHiders  дистанция/line-of-sight проверки)
-  PaintClient   ◄─BrushChargesUpdate───      PaintService
-                                             ScoreService
+  PaintClient   ◄─InkUpdate─────────────      PaintService (мазки-Texture, см. DECISIONS 14)
+  WhistleClient ──RequestWhistle────────►    WhistleService (Sound + RollOff, см. DECISIONS 15)
+  WhistleClient ◄─WhistleCountdownUpdate      ScoreService
 ```
+
+Общий модуль `ReplicatedStorage/Modules/BrushGeometry.lua` используется и
+клиентом (`PaintClient`, чтобы понять, куда мазнул игрок), и сервером
+(`PaintService`, чтобы честно разместить мазок по присланным координатам) —
+единая математика face/UV, без дублирования и риска рассинхронизации.
 
 ## RemoteEvents
 
@@ -33,14 +40,16 @@ Main.client ─ инициализирует:              Main.server ─ ин�
 
 | Событие | Направление | Параметры | Описание |
 |---|---|---|---|
-| `PaintCharacter` | клиент → сервер | `partName: string`, `color: Color3` | Запрос покрасить часть тела. Сервер валидирует часть, цвет, заряды, блокировку. |
+| `PaintStroke` | клиент → сервер | `points: {{partName: string, face: Enum.NormalId, u: number, v: number}}`, `color: Color3`, `brushSize: number` | Пакет точек мазка кисти, отправляется раз в ~0.15с при рисовании (не по одной точке за раз). Сервер валидирует роль/фазу/заморозку/чернила и сам создаёт `Texture`-мазки, см. `DECISIONS.md`, п.14. |
 | `RequestFreeze` | клиент → сервер | `wantsFreeze: boolean` | Запрос встать в позу / выйти из позы. |
 | `RoundStateChanged` | сервер → все клиенты | `state: string`, `timeLeft: number`, `extra: table` | Смена фазы. `state` ∈ {Lobby, Hiding, Seeking, RoundEnd}. `extra` может содержать `results`, `playersNeeded`, `playersCurrent`. |
 | `RoundTimerTick` | сервер → все клиенты | `remaining: number` | Тик таймера текущей фазы (раз в секунду). |
 | `PlayerCaught` | сервер → все клиенты | `hiderName: string`, `seekerName: string`, `remaining: number` | Кого-то поймали + сколько осталось. |
 | `RoundResults` | сервер → все клиенты | `results: table` | Итоги раунда (тот же формат, что в `RoundStateChanged` extra.results). |
-| `BrushChargesUpdate` | сервер → **один** клиент | `charges: number`, `maxCharges: number` | Обновление зарядов краски конкретного игрока. |
+| `InkUpdate` | сервер → **один** клиент | `amount: number`, `maxAmount: number` | Обновление количества "чернил" кисти конкретного игрока (замена прежних дискретных "зарядов", см. `DECISIONS.md`, п.14). |
 | `HideCatchPromptsFromHiders` | сервер → **только Hiders**, персонально каждому | `prompts: {ProximityPrompt}` | Список всех активных промптов поимки за раунд; клиент локально ставит им `Enabled = false`, чтобы Hiders не видели, где стоят другие Hiders (см. `DECISIONS.md`, п.12). Seekers это событие не получают. |
+| `RequestWhistle` | клиент → сервер | (без параметров) | Hider просит свистнуть прямо сейчас. Сервер проверяет роль/фазу/не пойман ли, сбрасывает таймер и проигрывает звук, см. `DECISIONS.md`, п.15. |
+| `WhistleCountdownUpdate` | сервер → **только Hiders**, персонально каждому | `secondsLeft: number` | Сколько секунд осталось до следующего (авто- или уже сброшенного) свистка. |
 
 RemoteFunctions в проекте **не используются** (всё построено на односторонних
 событиях — так проще и безопаснее).
@@ -58,7 +67,8 @@ RemoteFunctions в проекте **не используются** (всё по
 
 | Сервис | Таблица | Что хранит |
 |---|---|---|
-| `PaintService` | `brushData[player] = { charges }` | текущие заряды краски |
+| `PaintService` | `inkData[player] = { amount }` | текущие "чернила" кисти (0..`MAX_INK`) |
+| `PaintService` | `activeStamps[player] = { Texture, ... }` | очередь мазков игрока (FIFO), старые вытесняются по `MAX_ACTIVE_STAMPS_PER_PLAYER` |
 | `PaintService` | `paintingBlocked[player] = bool` | запрещена ли покраска (поза / фаза поиска) |
 | `FreezeService` | `frozenState[player] = bool` | стоит ли игрок в позе |
 | `FreezeService` | `savedLocomotion[player] = {walkSpeed, jumpPower, jumpHeight}` | исходные параметры движения, чтобы вернуть после позы |
@@ -67,6 +77,8 @@ RemoteFunctions в проекте **не используются** (всё по
 | `ScoreService` | `totalScores[player] = number` | очки за всю сессию сервера |
 | `ScoreService` | `roundScores[player] = number` | очки за текущий раунд |
 | `ScoreService` | `roundStartTimes[player] = tick()` | когда для Hider началась фаза поиска |
+| `WhistleService` | `nextWhistleAt[player] = tick()` | когда сработает следующий свисток этого Hider |
+| `WhistleService` | `whistleSounds[player] = Sound` | переиспользуемый звук свистка (создаётся один раз) |
 | `RoundManager` | `currentHiders`, `currentSeekers` | списки игроков по ролям в текущем раунде |
 | `PlayerRoleService` | Teams | роль игрока хранится штатно в `player.Team` |
 
@@ -87,14 +99,17 @@ RemoteFunctions в проекте **не используются** (всё по
         ▼                                             │
   [ Hiding ]  HIDING_PHASE_DURATION сек               │
      • Seekers → SeekerWaitingRoom, WalkSpeed=0       │
-     • Hiders: сброс зарядов, покраска разрешена      │
+     • Hiders: чернила и мазки прошлого раунда стёрты  │
+       (PaintService.ResetForNewRound), рисование разрешено│
         │                                             │
         ▼                                             │
   [ Seeking ]  SEEKING_PHASE_DURATION сек             │
      • Seekers освобождены                            │
-     • Hiders: покраска запрещена, поза не переключается│
+     • Hiders: рисование запрещено, поза не переключается│
      • на Hiders повешены ProximityPrompt (видны только │
        Seekers, требуют line-of-sight - см. DECISIONS 12)│
+     • у каждого Hider тикает таймер свистка - авто через │
+       WHISTLE_AUTO_INTERVAL_SECONDS или вручную (DECISIONS 15)│
      • досрочный выход, если пойманы все (OnAllCaught)│
         │                                             │
         ▼                                             │
@@ -127,4 +142,17 @@ RemoteFunctions в проекте **не используются** (всё по
   прочитать текущую фазу (`RoundManager.State`). Обратной связи нет —
   `RoundManager` получает остальные сервисы через `Init()`, а не `require()`,
   поэтому цикла зависимостей не возникает, но при рефакторинге `RoundManager`
-  стоит об этом помнить.
+  стоит об этом помнить. `PaintService.lua` подключает `RoundManager.lua` тем
+  же способом и по той же причине.
+- Мазки кисти (`Texture` с `OffsetStudsU/V`) размещаются через плоскую
+  проекцию на ближайшую грань `BasePart`, а не honest UV-wrap по кривизне
+  детали — это осознанное приближение (см. `DECISIONS.md`, п.14). Визуальную
+  калибровку (насколько естественно ложатся мазки на реальных R6/R15 моделях)
+  нужно провести в живом тесте Studio — см. `TASKS.md`.
+- `GameConfig.BRUSH_STAMP_IMAGE_ID` и `GameConfig.WHISTLE_SOUND_ID` — заглушки
+  `rbxassetid://0`, как и `POSE_ANIMATION_ID` (см. `DECISIONS.md`, п.10/14/15).
+  Игра не упадёт: присвоение невалидного `AssetId` свойству `Texture.Texture`/
+  `Sound.SoundId` само по себе не бросает ошибку в Luau (в отличие от
+  `Animator:LoadAnimation`, которую пришлось оборачивать в `pcall` — см. п.10),
+  но мазки будут невидимы, а свисток — беззвучен, пока ассеты не загружены в
+  Studio и ID не подставлены в `GameConfig.lua`.
