@@ -4,9 +4,14 @@
 -- (см. PaintService.SetPaintingAllowed и DECISIONS.md, п.5 и п.10).
 
 local Players = game:GetService("Players")
+local Teams = game:GetService("Teams")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
+-- Требуется только для проверки текущей фазы раунда (RoundManager.State).
+-- Обратной зависимости нет - RoundManager получает сервисы через Init(), а не
+-- через require(), так что цикла require здесь не образуется.
+local RoundManager = require(script.Parent.RoundManager)
 
 local FreezeService = {}
 
@@ -85,10 +90,30 @@ local function applyFreeze(player, wantsFreeze)
 	end
 end
 
+-- Поза - механика только для Hiders, и только пока идёт фаза пряток (Hiding).
+-- Seekers к ней не имеют доступа вообще (см. DECISIONS.md, п.13): в оригинале
+-- искатели не притворяются мебелью. Ограничение "только в Hiding" также не даёт
+-- Hider на ходу переключать позу во время поиска (подстроиться под шаги Seeker
+-- или внезапно встать/сняться с позы, чтобы сбить с толку) - решение зафиксировано
+-- в DECISIONS.md, п.13, включая обсуждение компромисса.
+local function isHider(player)
+	local hidersTeam = Teams:FindFirstChild(GameConfig.TEAM_HIDERS_NAME)
+	return hidersTeam ~= nil and player.Team == hidersTeam
+end
+
 local function onRequestFreeze(player, wantsFreeze)
 	if typeof(wantsFreeze) ~= "boolean" then
 		return
 	end
+
+	if not isHider(player) then
+		return -- Seekers не могут вставать в позу
+	end
+
+	if RoundManager.State ~= "Hiding" then
+		return -- переключать позу можно только во время фазы пряток
+	end
+
 	applyFreeze(player, wantsFreeze)
 end
 

@@ -1,12 +1,13 @@
 -- CatchService.lua
 -- Отвечает за обнаружение (поимку) прячущихся игроков искателями.
--- Используем ProximityPrompt: сервер сам слушает Triggered у промпта, который
--- существует в игре - это безопасно (не нужен RemoteEvent, который можно
--- подделать), т.к. Roblox передаёт срабатывание ProximityPrompt на сервер
--- напрямую (см. DECISIONS.md, п.4).
+-- Используем ProximityPrompt, но серверный Triggered - НЕ источник истины сам по
+-- себе (эксплойт fireproximityprompt может вызвать его без реальной близости -
+-- см. DECISIONS.md, п.4), поэтому в TryCatch мы дублируем на сервере и дистанцию,
+-- и проверку прямого взгляда (line of sight).
 
 local Teams = game:GetService("Teams")
 local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
@@ -39,10 +40,14 @@ local function attachPromptToHider(hiderPlayer)
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "CatchPrompt"
 	prompt.ActionText = "Поймать"
-	prompt.ObjectText = hiderPlayer.Name
+	-- ObjectText намеренно пустой - раньше тут было имя игрока (hiderPlayer.Name),
+	-- но это выдавало, кто именно спрятан под маскировкой (см. DECISIONS.md, п.12).
 	prompt.HoldDuration = GameConfig.CATCH_HOLD_DURATION
 	prompt.MaxActivationDistance = GameConfig.CATCH_MAX_DISTANCE
-	prompt.RequiresLineOfSight = false -- прячущийся может быть скрыт декорацией
+	-- Требуем прямой взгляд без препятствий (это встроенная клиентская проверка
+	-- Roblox - обходится тем же эксплойтом, что и дистанция, поэтому в TryCatch
+	-- есть точно такая же проверка через серверный raycast, см. hasLineOfSight).
+	prompt.RequiresLineOfSight = true
 	prompt.Parent = rootPart
 
 	prompt.Triggered:Connect(function(seekerPlayer)
@@ -50,14 +55,31 @@ local function attachPromptToHider(hiderPlayer)
 	end)
 
 	activePrompts[hiderPlayer] = prompt
+	return prompt
 end
 
 -- Вызывается в начале фазы поиска - расставляет промпты на всех Hiders
 function CatchService.StartSeekingPhase(hiders)
 	foundState = {}
+	local allPrompts = {}
+
 	for _, hider in ipairs(hiders) do
 		foundState[hider] = false
-		attachPromptToHider(hider)
+		local prompt = attachPromptToHider(hider)
+		if prompt then
+			table.insert(allPrompts, prompt)
+		end
+	end
+
+	-- Прячем подсказки "Поймать" от самих Hiders: иначе, подойдя друг к другу,
+	-- они видят, где стоит другой замаскированный игрок - это убивает смысл
+	-- пряток. Отправляем каждому Hider персонально, только на его клиенте
+	-- подсказки локально выключаются (Seekers это событие не получают и видят
+	-- подсказки как обычно). См. DECISIONS.md, п.12.
+	if remotesRef then
+		for _, hider in ipairs(hiders) do
+			remotesRef.HideCatchPromptsFromHiders:FireClient(hider, allPrompts)
+		end
 	end
 end
 
@@ -109,6 +131,35 @@ local function seekerIsCloseEnough(seekerPlayer, hiderPlayer)
 	return distance <= maxAllowed
 end
 
+-- Серверная проверка прямого взгляда (line of sight) между искателем и прячущимся.
+-- ProximityPrompt.RequiresLineOfSight - это только клиентская подсказка (решает,
+-- показывать ли кнопку тому конкретному клиенту), её тоже обходит fireproximityprompt,
+-- поэтому честную проверку "не через стену ли" делаем на сервере через raycast.
+local function hasLineOfSight(seekerPlayer, hiderPlayer)
+	local seekerChar = seekerPlayer.Character
+	local hiderChar = hiderPlayer.Character
+	if not seekerChar or not hiderChar then
+		return false
+	end
+
+	local seekerHead = seekerChar:FindFirstChild("Head")
+	local hiderRoot = hiderChar:FindFirstChild("HumanoidRootPart")
+	if not seekerHead or not hiderRoot then
+		return false
+	end
+
+	local origin = seekerHead.Position
+	local toTarget = hiderRoot.Position - origin
+
+	local raycastParams = RaycastParams.new()
+	raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+	raycastParams.FilterDescendantsInstances = { seekerChar, hiderChar }
+
+	local result = Workspace:Raycast(origin, toTarget, raycastParams)
+	-- Если луч долетел до цели, ничего не задев по пути - обзор чист
+	return result == nil
+end
+
 function CatchService.TryCatch(seekerPlayer, hiderPlayer)
 	-- Проверяем на сервере, что всё по-честному: искатель - правда искатель,
 	-- а найденный - правда прячущийся и ещё не найден
@@ -121,8 +172,13 @@ function CatchService.TryCatch(seekerPlayer, hiderPlayer)
 		return -- уже найден или не участвует в этом раунде
 	end
 
-	-- Защита от эксплойта fireproximityprompt: перепроверяем дистанцию на сервере
+	-- Защита от эксплойта fireproximityprompt: перепроверяем на сервере и
+	-- дистанцию, и прямой взгляд (а не только доверяем клиентскому Triggered)
 	if not seekerIsCloseEnough(seekerPlayer, hiderPlayer) then
+		return
+	end
+
+	if not hasLineOfSight(seekerPlayer, hiderPlayer) then
 		return
 	end
 

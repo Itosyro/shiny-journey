@@ -4,12 +4,16 @@
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
 
 local player = Players.LocalPlayer
 
 local FreezeClient = {}
 
 local isFrozen = false
+local currentPhase = "Lobby"
 local freezeRemote
 
 -- Простой визуальный фидбек нажатия кнопки (лёгкий "щелчок" размером).
@@ -29,6 +33,24 @@ local function playButtonPressFeedback(button)
 	tweenDown.Completed:Connect(function()
 		tweenUp:Play()
 	end)
+end
+
+-- Кнопка видна только Hiders и активна только в фазу пряток (Hiding) - это
+-- клиентское зеркало серверного ограничения в FreezeService.onRequestFreeze
+-- (см. DECISIONS.md, п.13). Даже если бы кто-то обошёл клиент, сервер всё
+-- равно откажет - это лишь UX, чтобы Seeker не видел бесполезную кнопку.
+local function isHider()
+	return player.Team ~= nil and player.Team.Name == GameConfig.TEAM_HIDERS_NAME
+end
+
+local function updateButtonAvailability(button)
+	local hider = isHider()
+	local canToggle = hider and currentPhase == "Hiding"
+
+	button.Visible = hider
+	button.Active = canToggle
+	button.AutoButtonColor = canToggle
+	button.BackgroundTransparency = canToggle and 0 or 0.5
 end
 
 local function toggleFreeze(button)
@@ -77,7 +99,22 @@ function FreezeClient.Init(remotesFolder)
 		isFrozen = false
 		button.Text = "Заморозиться (Поза)"
 		button.BackgroundColor3 = Color3.fromRGB(200, 60, 60)
+		updateButtonAvailability(button)
 	end)
+
+	-- Следим за фазой раунда и за сменой команды, чтобы прятать/блокировать кнопку
+	-- для Seekers и вне фазы Hiding (см. isHider/updateButtonAvailability выше)
+	local roundStateRemote = remotesFolder:WaitForChild("RoundStateChanged")
+	roundStateRemote.OnClientEvent:Connect(function(state)
+		currentPhase = state
+		updateButtonAvailability(button)
+	end)
+
+	player:GetPropertyChangedSignal("Team"):Connect(function()
+		updateButtonAvailability(button)
+	end)
+
+	updateButtonAvailability(button)
 end
 
 return FreezeClient

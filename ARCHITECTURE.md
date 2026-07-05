@@ -2,8 +2,10 @@
 
 Документ описывает **реальную текущую** архитектуру проекта (как оно есть в
 коде на ветке `claude/meccha-chameleon-roblox-jvepyg`), а не идеальный план.
-Составлен в ходе ревью Opus (2026-07-05). Обновлять при изменении контрактов
-(RemoteEvents, состояние игрока, фазы раунда).
+Составлен в ходе ревью Opus (2026-07-05), обновлён после внедрения фиксов из
+аудита (line-of-sight поимка, скрытие подсказок от Hiders, гейтинг позы —
+2026-07-05). Обновлять при изменении контрактов (RemoteEvents, состояние
+игрока, фазы раунда).
 
 ## Общая схема
 
@@ -15,12 +17,13 @@
 ------------------------------             ----------------------------
 Main.client ─ инициализирует:              Main.server ─ инициализирует:
   PaintClient   ──PaintCharacter────────►    PaintService
-  FreezeClient  ──RequestFreeze─────────►    FreezeService
+  FreezeClient  ──RequestFreeze─────────►    FreezeService ──require──► RoundManager (для проверки фазы)
   RoundUIClient ◄─RoundStateChanged─────     RoundManager  (главный автомат)
                 ◄─RoundTimerTick───────      PlayerRoleService
-                ◄─PlayerCaught────────       CatchService (ProximityPrompt)
-                ◄─RoundResults───────        ScoreService
+                ◄─PlayerCaught────────       CatchService (ProximityPrompt + серверные
+  CatchClient   ◄─HideCatchPromptsFromHiders  дистанция/line-of-sight проверки)
   PaintClient   ◄─BrushChargesUpdate───      PaintService
+                                             ScoreService
 ```
 
 ## RemoteEvents
@@ -37,6 +40,7 @@ Main.client ─ инициализирует:              Main.server ─ ин�
 | `PlayerCaught` | сервер → все клиенты | `hiderName: string`, `seekerName: string`, `remaining: number` | Кого-то поймали + сколько осталось. |
 | `RoundResults` | сервер → все клиенты | `results: table` | Итоги раунда (тот же формат, что в `RoundStateChanged` extra.results). |
 | `BrushChargesUpdate` | сервер → **один** клиент | `charges: number`, `maxCharges: number` | Обновление зарядов краски конкретного игрока. |
+| `HideCatchPromptsFromHiders` | сервер → **только Hiders**, персонально каждому | `prompts: {ProximityPrompt}` | Список всех активных промптов поимки за раунд; клиент локально ставит им `Enabled = false`, чтобы Hiders не видели, где стоят другие Hiders (см. `DECISIONS.md`, п.12). Seekers это событие не получают. |
 
 RemoteFunctions в проекте **не используются** (всё построено на односторонних
 событиях — так проще и безопаснее).
@@ -59,7 +63,7 @@ RemoteFunctions в проекте **не используются** (всё по
 | `FreezeService` | `frozenState[player] = bool` | стоит ли игрок в позе |
 | `FreezeService` | `savedLocomotion[player] = {walkSpeed, jumpPower, jumpHeight}` | исходные параметры движения, чтобы вернуть после позы |
 | `CatchService` | `foundState[player] = bool` | найден ли этот Hider (только участники текущего раунда) |
-| `CatchService` | `activePrompts[player] = ProximityPrompt` | висящий на игроке промпт поимки |
+| `CatchService` | `activePrompts[player] = ProximityPrompt` | висящий на игроке промпт поимки (`ActionText = "Поймать"`, без имени, `RequiresLineOfSight = true`) |
 | `ScoreService` | `totalScores[player] = number` | очки за всю сессию сервера |
 | `ScoreService` | `roundScores[player] = number` | очки за текущий раунд |
 | `ScoreService` | `roundStartTimes[player] = tick()` | когда для Hider началась фаза поиска |
@@ -88,8 +92,9 @@ RemoteFunctions в проекте **не используются** (всё по
         ▼                                             │
   [ Seeking ]  SEEKING_PHASE_DURATION сек             │
      • Seekers освобождены                            │
-     • Hiders: покраска запрещена                     │
-     • на Hiders повешены ProximityPrompt             │
+     • Hiders: покраска запрещена, поза не переключается│
+     • на Hiders повешены ProximityPrompt (видны только │
+       Seekers, требуют line-of-sight - см. DECISIONS 12)│
      • досрочный выход, если пойманы все (OnAllCaught)│
         │                                             │
         ▼                                             │
@@ -113,5 +118,13 @@ RemoteFunctions в проекте **не используются** (всё по
 - Списки `currentHiders`/`currentSeekers` фиксируются на старте раунда и не
   реагируют на вход новых игроков посреди раунда (новые ждут следующего). Это
   ожидаемое поведение MVP.
-- Роль/фаза не проверяются в `FreezeService` (любой может встать в позу в любой
-  момент) — см. TASKS.md, раздел "Полировка MVP".
+- `FreezeService` теперь проверяет роль (только Hiders) и фазу (только
+  `Hiding`) перед переключением позы (см. `DECISIONS.md`, п.13) — раньше это
+  было открытым ограничением, сейчас закрыто. Побочный эффект: Hider не может
+  ни встать в позу, ни выйти из неё во время `Seeking` — компромисс описан в
+  том же пункте `DECISIONS.md`.
+- `FreezeService.lua` подключает `RoundManager.lua` через `require`, чтобы
+  прочитать текущую фазу (`RoundManager.State`). Обратной связи нет —
+  `RoundManager` получает остальные сервисы через `Init()`, а не `require()`,
+  поэтому цикла зависимостей не возникает, но при рефакторинге `RoundManager`
+  стоит об этом помнить.

@@ -17,6 +17,7 @@ local REMOTE_EVENT_NAMES = {
 	"PlayerCaught",       -- сервер -> клиент: игрока поймали
 	"RoundResults",       -- сервер -> клиент: итоги раунда (очки)
 	"BrushChargesUpdate", -- сервер -> клиент: обновление количества зарядов краски
+	"HideCatchPromptsFromHiders", -- сервер -> клиент (только Hiders): локально скрыть подсказки "Поймать"
 }
 
 function RemotesSetup.Init()
