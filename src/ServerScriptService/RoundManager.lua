@@ -162,9 +162,24 @@ local function gameLoop()
 		if #getAvailablePlayers() >= GameConfig.MIN_PLAYERS_TO_START then
 			currentHiders, currentSeekers = services.PlayerRoleService.AssignRoles(getAvailablePlayers())
 
-			runHidingPhase()
-			runSeekingPhase()
-			runRoundEnd()
+			-- Оборачиваем раунд в pcall: если внутри фазы случится ошибка, весь игровой
+			-- цикл не должен умереть навсегда (иначе сервер зависнет без раундов).
+			-- При ошибке делаем аварийную уборку и возвращаемся в лобби.
+			local ok, err = pcall(function()
+				runHidingPhase()
+				runSeekingPhase()
+				runRoundEnd()
+			end)
+
+			if not ok then
+				warn("[MecchaChameleon] Ошибка в раунде, сбрасываю в лобби: " .. tostring(err))
+				services.CatchService.EndRound()
+				for _, player in ipairs(getAvailablePlayers()) do
+					services.FreezeService.ForceUnfreeze(player)
+					services.PlayerRoleService.SetSpectator(player)
+					setWalkable(player, true)
+				end
+			end
 		end
 	end
 end

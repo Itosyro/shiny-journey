@@ -11,6 +11,10 @@ local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
 local FreezeService = {}
 
 local frozenState = {} -- [Player] = true/false
+-- Сохраняем исходные параметры движения игрока перед заморозкой, чтобы точно
+-- вернуть их при разморозке. Раньше JumpHeight обнулялся, но не восстанавливался,
+-- из-за чего на современных ригах (UseJumpPower=false) игрок больше не мог прыгать.
+local savedLocomotion = {} -- [Player] = { walkSpeed, jumpPower, jumpHeight }
 local PaintServiceRef
 
 local function applyFreeze(player, wantsFreeze)
@@ -27,6 +31,16 @@ local function applyFreeze(player, wantsFreeze)
 	frozenState[player] = wantsFreeze
 
 	if wantsFreeze then
+		-- Запоминаем текущие значения ровно один раз (чтобы повторный вызов freeze
+		-- не сохранил уже обнулённые значения)
+		if not savedLocomotion[player] then
+			savedLocomotion[player] = {
+				walkSpeed = humanoid.WalkSpeed,
+				jumpPower = humanoid.JumpPower,
+				jumpHeight = humanoid.JumpHeight,
+			}
+		end
+
 		humanoid.WalkSpeed = 0
 		humanoid.JumpPower = 0
 		humanoid.JumpHeight = 0
@@ -47,8 +61,13 @@ local function applyFreeze(player, wantsFreeze)
 			end
 		end
 	else
-		humanoid.WalkSpeed = 16
-		humanoid.JumpPower = 50
+		-- Возвращаем исходные значения движения (или разумные значения по умолчанию,
+		-- если по какой-то причине ничего не сохранили)
+		local saved = savedLocomotion[player]
+		humanoid.WalkSpeed = saved and saved.walkSpeed or 16
+		humanoid.JumpPower = saved and saved.jumpPower or 50
+		humanoid.JumpHeight = saved and saved.jumpHeight or 7.2
+		savedLocomotion[player] = nil
 
 		-- Останавливаем все анимации с приоритетом Action (то есть нашу позу)
 		local animator = humanoid:FindFirstChildOfClass("Animator")
@@ -90,6 +109,7 @@ function FreezeService.Init(remotes, paintService)
 
 	Players.PlayerRemoving:Connect(function(player)
 		frozenState[player] = nil
+		savedLocomotion[player] = nil
 	end)
 end
 

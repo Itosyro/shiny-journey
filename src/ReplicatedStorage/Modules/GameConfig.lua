@@ -26,6 +26,11 @@ GameConfig.MAX_BRUSH_CHARGES = 20        -- сколько "мазков" кра
 GameConfig.BRUSH_RECHARGE_SECONDS = 3    -- через сколько секунд восстанавливается 1 заряд
 GameConfig.EYEDROPPER_MAX_DISTANCE = 60  -- максимальная дальность пипетки (в стадах)
 
+-- === Обнаружение (поимка) ===
+GameConfig.CATCH_MAX_DISTANCE = 8          -- на каком расстоянии искатель может поймать (в стадах)
+GameConfig.CATCH_DISTANCE_TOLERANCE = 4    -- запас на задержку сети/движение при серверной проверке дистанции
+GameConfig.CATCH_HOLD_DURATION = 0.6       -- сколько держать кнопку "Поймать" (мешает случайным тапам)
+
 -- Части тела, которые разрешено красить (имена BasePart в модели персонажа).
 -- Список покрывает и R15, и R6 риги (см. DECISIONS.md, п.8).
 GameConfig.PAINTABLE_PART_NAMES = {

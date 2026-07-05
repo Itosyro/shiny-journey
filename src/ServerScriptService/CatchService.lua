@@ -6,6 +6,7 @@
 -- напрямую (см. DECISIONS.md, п.4).
 
 local Teams = game:GetService("Teams")
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
@@ -39,8 +40,8 @@ local function attachPromptToHider(hiderPlayer)
 	prompt.Name = "CatchPrompt"
 	prompt.ActionText = "Поймать"
 	prompt.ObjectText = hiderPlayer.Name
-	prompt.HoldDuration = 0.6
-	prompt.MaxActivationDistance = 8
+	prompt.HoldDuration = GameConfig.CATCH_HOLD_DURATION
+	prompt.MaxActivationDistance = GameConfig.CATCH_MAX_DISTANCE
 	prompt.RequiresLineOfSight = false -- прячущийся может быть скрыт декорацией
 	prompt.Parent = rootPart
 
@@ -86,6 +87,28 @@ function CatchService.IsFound(player)
 	return foundState[player] == true
 end
 
+-- Серверная проверка дистанции между искателем и прячущимся.
+-- ВАЖНО: без неё эксплойт fireproximityprompt позволяет "поймать" всех Hiders
+-- с любой точки карты, т.к. серверный Triggered срабатывает без учёта дистанции
+-- (см. DECISIONS.md, п.4). Здесь мы честно меряем расстояние на сервере.
+local function seekerIsCloseEnough(seekerPlayer, hiderPlayer)
+	local seekerChar = seekerPlayer.Character
+	local hiderChar = hiderPlayer.Character
+	if not seekerChar or not hiderChar then
+		return false
+	end
+
+	local seekerRoot = seekerChar:FindFirstChild("HumanoidRootPart")
+	local hiderRoot = hiderChar:FindFirstChild("HumanoidRootPart")
+	if not seekerRoot or not hiderRoot then
+		return false
+	end
+
+	local distance = (seekerRoot.Position - hiderRoot.Position).Magnitude
+	local maxAllowed = GameConfig.CATCH_MAX_DISTANCE + GameConfig.CATCH_DISTANCE_TOLERANCE
+	return distance <= maxAllowed
+end
+
 function CatchService.TryCatch(seekerPlayer, hiderPlayer)
 	-- Проверяем на сервере, что всё по-честному: искатель - правда искатель,
 	-- а найденный - правда прячущийся и ещё не найден
@@ -96,6 +119,11 @@ function CatchService.TryCatch(seekerPlayer, hiderPlayer)
 
 	if foundState[hiderPlayer] ~= false then
 		return -- уже найден или не участвует в этом раунде
+	end
+
+	-- Защита от эксплойта fireproximityprompt: перепроверяем дистанцию на сервере
+	if not seekerIsCloseEnough(seekerPlayer, hiderPlayer) then
+		return
 	end
 
 	foundState[hiderPlayer] = true
@@ -123,9 +151,32 @@ function CatchService.OnAllCaught(callback)
 	onAllCaughtCallback = callback
 end
 
+-- Если прячущийся вышел из игры посреди фазы поиска - убираем его из подсчёта,
+-- иначе CountRemaining() никогда не дойдёт до 0 и раунд не завершится досрочно,
+-- даже когда всех оставшихся уже нашли.
+local function onHiderLeft(player)
+	if foundState[player] == nil then
+		return -- не участвует в этом раунде как прячущийся
+	end
+
+	foundState[player] = nil -- убираем из счёта (не "пойман", просто вышел)
+
+	local prompt = activePrompts[player]
+	if prompt then
+		prompt:Destroy()
+		activePrompts[player] = nil
+	end
+
+	if CatchService.CountRemaining() <= 0 and onAllCaughtCallback then
+		onAllCaughtCallback()
+	end
+end
+
 function CatchService.Init(remotes, scoreService)
 	remotesRef = remotes
 	ScoreServiceRef = scoreService
+
+	Players.PlayerRemoving:Connect(onHiderLeft)
 end
 
 return CatchService
