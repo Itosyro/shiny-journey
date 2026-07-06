@@ -6,8 +6,9 @@
 аудита (line-of-sight поимка, скрытие подсказок от Hiders, гейтинг позы),
 после пересмотра механики покраски на рисование кистью + добавления свистка,
 после пересмотра позы на конкретные пресеты + добавления режима Infection
-(2026-07-05), и после добавления лобби-UI, гибкого баланса ролей 2-24,
-приватных комнат и режима зрителя (2026-07-06). Обновлять при изменении
+(2026-07-05), после добавления лобби-UI, гибкого баланса ролей 2-24,
+приватных комнат и режима зрителя, и после добавления системы очков
+Missed Point Ranking (обе части — 2026-07-06). Обновлять при изменении
 контрактов (RemoteEvents, состояние игрока, фазы раунда).
 
 ## Общая схема
@@ -27,7 +28,8 @@ Main.client ─ инициализирует:              Main.server ─ ин�
   CatchClient   ◄─HideCatchPromptsFromHiders  дистанция/line-of-sight проверки; OnCatch-хук
   PaintClient   ◄─InkUpdate─────────────      для перехода роли в Infection, см. DECISIONS 18)
   WhistleClient ──RequestWhistle────────►    WhistleService (Sound + RollOff, см. DECISIONS 15)
-  WhistleClient ◄─WhistleCountdownUpdate      ScoreService
+  WhistleClient ◄─WhistleCountdownUpdate      ScoreService ──require──► CatchService, LineOfSightUtil
+  RoundUIClient ◄─MissedPointRankingUpdate    (Missed Point Ranking, только самому Hider'у, см. DECISIONS 22)
   LobbyUIClient ◄─RoundStateChanged─────     PrivateRoomService (TeleportService +
                 ──CreatePrivateRoom───►       MemoryStoreService, см. DECISIONS 20)
                 ──JoinPrivateRoom─────►
@@ -77,14 +79,23 @@ Main.client ─ инициализирует:              Main.server ─ ин�
 | `JoinPrivateRoom` | клиент → сервер | `password: string` | Войти в комнату по паролю. Сервер ищет код по паролю в `MemoryStoreService` и телепортирует, см. `DECISIONS.md`, п.20. |
 | `PrivateRoomError` | сервер → **один** клиент | `message: string` | Не удалось создать/войти (текст причины на русском для показа в UI). |
 | `SpectatorModeChanged` | сервер → **один** клиент | `isSpectating: boolean` | Включить/выключить клиентский режим зрителя (скрытый персонаж + fly-камера), см. `DECISIONS.md`, п.21. |
+| `MissedPointRankingUpdate` | сервер → **только сам Hider** | `total: number` | Личный счётчик Missed Point Ranking (замечен, но не пойман). Seeker это событие никогда не получает - см. `DECISIONS.md`, п.22. |
 
 RemoteFunctions в проекте **не используются** (всё построено на односторонних
 событиях — так проще и безопаснее).
 
 Формат одной записи в `results`:
 ```lua
-{ name = "PlayerName", role = "Hider" | "Seeker", roundScore = 42, totalScore = 137 }
+{ name = "PlayerName", role = "Hider" | "Seeker", roundScore = 42, totalScore = 137, missedPoints = 9 }
 ```
+`missedPoints` — сколько очков Missed Point Ranking набрал этот игрок за
+раунд (0, если ни разу не был замечен незамеченным - см. `DECISIONS.md`,
+п.22). Используется на экране итогов для номинации "Лучшая маскировка".
+
+`LineOfSightUtil.lua` (`ServerScriptService`, только сервер) — общая
+математика дистанции и прямого взгляда (raycast), переиспользуется и
+`CatchService` (поимка), и `ScoreService` (Missed Point Ranking), чтобы не
+дублировать один и тот же raycast-код в двух местах.
 
 ## Состояние на сервере (кто что хранит)
 
@@ -105,6 +116,7 @@ RemoteFunctions в проекте **не используются** (всё по
 | `ScoreService` | `totalScores[player] = number` | очки за всю сессию сервера |
 | `ScoreService` | `roundScores[player] = number` | очки за текущий раунд |
 | `ScoreService` | `roundStartTimes[player] = tick()` | когда для Hider началась фаза поиска |
+| `ScoreService` | `missedPointScores[player] = number` | очки Missed Point Ranking за текущий раунд (см. `DECISIONS.md`, п.22) |
 | `WhistleService` | `nextWhistleAt[player] = tick()` | когда сработает следующий свисток этого Hider |
 | `WhistleService` | `whistleSounds[player] = Sound` | переиспользуемый звук свистка (создаётся один раз) |
 | `RoundManager` | `currentHiders`, `currentSeekers` | списки игроков по ролям в текущем раунде |
@@ -146,6 +158,10 @@ RemoteFunctions в проекте **не используются** (всё по
        Seekers, требуют line-of-sight - см. DECISIONS 12)│
      • у каждого Hider тикает таймер свистка - авто через │
        WHISTLE_AUTO_INTERVAL_SECONDS или вручную (DECISIONS 15)│
+     • раз в MISSED_POINT_CHECK_INTERVAL_SECONDS каждый   │
+       живой Hider проверяется на видимость Seekers -     │
+       Missed Point Ranking очки, только самому Hider'у   │
+       (ScoreService, DECISIONS 22)                       │
      • при поимке (CatchService.OnCatch): если GameMode  │
        == Infection - пойманный мгновенно снимает позу/ │
        покраску и становится Seeker "на лету" (DECISIONS 18)│
@@ -239,3 +255,13 @@ RemoteFunctions в проекте **не используются** (всё по
   будущем появится способ оказаться Hider/Seeker без назначенной команды
   (маловероятно при нынешней архитектуре), эту проверку нужно будет
   расширить.
+- Числа `MISSED_POINT_MAX_DISTANCE`/`MISSED_POINT_PER_TICK`/
+  `SURVIVAL_BONUS_POINTS` (см. `DECISIONS.md`, п.22) подобраны на бумаге,
+  без живого плейтеста — баланс между очками за поимку/выживание и
+  очками Missed Point Ranking не проверен вживую, см. `TASKS.md`, Раздел 0.8.
+- Живой тест через Roblox Studio MCP (см. `TASKS.md`, Раздел 1, "Live Test
+  Findings") не проведён — сессия Claude Code, в которой писался этот код,
+  выполняется в изолированном облачном контейнере без доступа к
+  десктопным GUI-приложениям, поэтому Roblox Studio физически не может
+  быть запущен из неё, вне зависимости от наличия MCP-плагина. Всё
+  тестирование в этой сессии ограничено статическим анализом кода.

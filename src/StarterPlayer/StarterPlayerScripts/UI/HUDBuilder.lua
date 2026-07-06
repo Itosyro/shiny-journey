@@ -64,6 +64,21 @@ function HUDBuilder.Create(screenGui)
 	foundLabel.Text = ""
 	foundLabel.Parent = root
 
+	-- Личный фидбек Missed Point Ranking (см. DECISIONS.md, п.22) - виден
+	-- только самому Hider'у (сервер шлёт это событие только ему), поэтому
+	-- размещаем ниже foundLabel без риска что-то выдать Seeker'у.
+	local missedPointLabel = Instance.new("TextLabel")
+	missedPointLabel.Name = "MissedPointLabel"
+	missedPointLabel.AnchorPoint = Vector2.new(0.5, 0)
+	missedPointLabel.Position = UDim2.new(0.5, 0, 1, 28)
+	missedPointLabel.Size = UDim2.new(0, 260, 0, 20)
+	missedPointLabel.BackgroundTransparency = 1
+	missedPointLabel.Font = Enum.Font.Gotham
+	missedPointLabel.TextScaled = true
+	missedPointLabel.TextColor3 = Color3.fromRGB(150, 255, 180)
+	missedPointLabel.Text = ""
+	missedPointLabel.Parent = root
+
 	local function formatTime(seconds)
 		seconds = math.max(0, math.floor(seconds))
 		local minutes = math.floor(seconds / 60)
@@ -83,6 +98,9 @@ function HUDBuilder.Create(screenGui)
 		end,
 		SetFoundText = function(text)
 			foundLabel.Text = text
+		end,
+		SetMissedPointText = function(text)
+			missedPointLabel.Text = text
 		end,
 	}
 end

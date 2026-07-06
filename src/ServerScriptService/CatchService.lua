@@ -7,10 +7,10 @@
 
 local Teams = game:GetService("Teams")
 local Players = game:GetService("Players")
-local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
+local LineOfSightUtil = require(script.Parent.LineOfSightUtil)
 
 local CatchService = {}
 
@@ -47,7 +47,7 @@ local function attachPromptToHider(hiderPlayer)
 	prompt.MaxActivationDistance = GameConfig.CATCH_MAX_DISTANCE
 	-- Требуем прямой взгляд без препятствий (это встроенная клиентская проверка
 	-- Roblox - обходится тем же эксплойтом, что и дистанция, поэтому в TryCatch
-	-- есть точно такая же проверка через серверный raycast, см. hasLineOfSight).
+	-- есть точно такая же проверка через серверный raycast, см. LineOfSightUtil.lua).
 	prompt.RequiresLineOfSight = true
 	prompt.Parent = rootPart
 
@@ -111,57 +111,6 @@ function CatchService.IsFound(player)
 	return foundState[player] == true
 end
 
--- Серверная проверка дистанции между искателем и прячущимся.
--- ВАЖНО: без неё эксплойт fireproximityprompt позволяет "поймать" всех Hiders
--- с любой точки карты, т.к. серверный Triggered срабатывает без учёта дистанции
--- (см. DECISIONS.md, п.4). Здесь мы честно меряем расстояние на сервере.
-local function seekerIsCloseEnough(seekerPlayer, hiderPlayer)
-	local seekerChar = seekerPlayer.Character
-	local hiderChar = hiderPlayer.Character
-	if not seekerChar or not hiderChar then
-		return false
-	end
-
-	local seekerRoot = seekerChar:FindFirstChild("HumanoidRootPart")
-	local hiderRoot = hiderChar:FindFirstChild("HumanoidRootPart")
-	if not seekerRoot or not hiderRoot then
-		return false
-	end
-
-	local distance = (seekerRoot.Position - hiderRoot.Position).Magnitude
-	local maxAllowed = GameConfig.CATCH_MAX_DISTANCE + GameConfig.CATCH_DISTANCE_TOLERANCE
-	return distance <= maxAllowed
-end
-
--- Серверная проверка прямого взгляда (line of sight) между искателем и прячущимся.
--- ProximityPrompt.RequiresLineOfSight - это только клиентская подсказка (решает,
--- показывать ли кнопку тому конкретному клиенту), её тоже обходит fireproximityprompt,
--- поэтому честную проверку "не через стену ли" делаем на сервере через raycast.
-local function hasLineOfSight(seekerPlayer, hiderPlayer)
-	local seekerChar = seekerPlayer.Character
-	local hiderChar = hiderPlayer.Character
-	if not seekerChar or not hiderChar then
-		return false
-	end
-
-	local seekerHead = seekerChar:FindFirstChild("Head")
-	local hiderRoot = hiderChar:FindFirstChild("HumanoidRootPart")
-	if not seekerHead or not hiderRoot then
-		return false
-	end
-
-	local origin = seekerHead.Position
-	local toTarget = hiderRoot.Position - origin
-
-	local raycastParams = RaycastParams.new()
-	raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-	raycastParams.FilterDescendantsInstances = { seekerChar, hiderChar }
-
-	local result = Workspace:Raycast(origin, toTarget, raycastParams)
-	-- Если луч долетел до цели, ничего не задев по пути - обзор чист
-	return result == nil
-end
-
 function CatchService.TryCatch(seekerPlayer, hiderPlayer)
 	-- Проверяем на сервере, что всё по-честному: искатель - правда искатель,
 	-- а найденный - правда прячущийся и ещё не найден
@@ -175,12 +124,18 @@ function CatchService.TryCatch(seekerPlayer, hiderPlayer)
 	end
 
 	-- Защита от эксплойта fireproximityprompt: перепроверяем на сервере и
-	-- дистанцию, и прямой взгляд (а не только доверяем клиентскому Triggered)
-	if not seekerIsCloseEnough(seekerPlayer, hiderPlayer) then
+	-- дистанцию, и прямой взгляд (а не только доверяем клиентскому Triggered).
+	-- ВАЖНО (см. DECISIONS.md, п.4): без этой проверки читер мог бы "поймать"
+	-- всех Hiders с любой точки карты, т.к. серверный Triggered срабатывает
+	-- без учёта дистанции. ProximityPrompt.RequiresLineOfSight - только
+	-- клиентская подсказка, тоже обходится тем же эксплойтом, поэтому честную
+	-- проверку "не через стену ли" всегда дублируем на сервере.
+	local maxCatchDistance = GameConfig.CATCH_MAX_DISTANCE + GameConfig.CATCH_DISTANCE_TOLERANCE
+	if not LineOfSightUtil.IsWithinDistance(seekerPlayer, hiderPlayer, maxCatchDistance) then
 		return
 	end
 
-	if not hasLineOfSight(seekerPlayer, hiderPlayer) then
+	if not LineOfSightUtil.HasLineOfSight(seekerPlayer, hiderPlayer) then
 		return
 	end
 

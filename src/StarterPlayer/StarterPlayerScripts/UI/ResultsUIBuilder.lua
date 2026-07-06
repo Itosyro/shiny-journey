@@ -62,20 +62,71 @@ function ResultsUIBuilder.Create(screenGui)
 		label.Size = UDim2.new(1, 0, 1, 0)
 		label.Font = Enum.Font.Gotham
 		label.TextScaled = true
+		label.TextWrapped = true
 		label.TextXAlignment = Enum.TextXAlignment.Left
 		label.TextColor3 = color or Color3.fromRGB(255, 255, 255)
 		label.Text = text
 		label.Parent = row
 	end
 
+	-- Небольшой заголовок-разделитель секции (Топ раунда / Лучшая маскировка /
+	-- полный список) - тот же ряд, что и addRow, только жирным и бледнее.
+	local function addHeader(order, text)
+		addRow(order, text, Color3.fromRGB(190, 190, 190))
+	end
+
 	return {
+		-- results: массив {name, role, roundScore, totalScore, missedPoints}
+		-- (missedPoints - очки Missed Point Ranking за раунд, см. DECISIONS.md,
+		-- п.22). Показываем топ-3 раунда по roundScore и отдельную шуточную
+		-- номинацию "Лучшая маскировка" (максимальный missedPoints), а затем
+		-- полный список всех участников - как и раньше.
 		Show = function(results)
 			clearRows()
-			for i, entry in ipairs(results) do
+			local order = 0
+
+			local sortedByRoundScore = table.clone(results)
+			table.sort(sortedByRoundScore, function(a, b)
+				return a.roundScore > b.roundScore
+			end)
+
+			local topCount = math.min(3, #sortedByRoundScore)
+			if topCount > 0 then
+				order += 1
+				addHeader(order, "🏆 Топ раунда")
+				for i = 1, topCount do
+					local entry = sortedByRoundScore[i]
+					order += 1
+					addRow(order, string.format("%d. %s - %d очков", i, entry.name, entry.roundScore), Color3.fromRGB(255, 215, 0))
+				end
+			end
+
+			-- Показываем номинацию, только если кто-то реально заработал очки
+			-- Missed Point Ranking - иначе пустая номинация выглядела бы как
+			-- баг, а не как честное "в этот раз никто не рискнул прятаться на виду".
+			local bestMasking = nil
+			for _, entry in ipairs(results) do
+				local missedPoints = entry.missedPoints or 0
+				if missedPoints > 0 and (not bestMasking or missedPoints > bestMasking.missedPoints) then
+					bestMasking = entry
+				end
+			end
+			if bestMasking then
+				order += 1
+				addHeader(order, "🎭 Лучшая маскировка раунда")
+				order += 1
+				addRow(order, string.format("%s (+%d - был на виду и не попался)", bestMasking.name, bestMasking.missedPoints), Color3.fromRGB(150, 255, 180))
+			end
+
+			order += 1
+			addHeader(order, "Все игроки")
+			for _, entry in ipairs(results) do
 				local roleText = entry.role == "Seeker" and "Искатель" or "Прячущийся"
 				local color = entry.role == "Seeker" and Color3.fromRGB(255, 120, 120) or Color3.fromRGB(150, 220, 255)
-				addRow(i, string.format("%s (%s): +%d очков (всего %d)", entry.name, roleText, entry.roundScore, entry.totalScore), color)
+				order += 1
+				addRow(order, string.format("%s (%s): +%d очков (всего %d)", entry.name, roleText, entry.roundScore, entry.totalScore), color)
 			end
+
 			root.Visible = true
 		end,
 		Hide = function()

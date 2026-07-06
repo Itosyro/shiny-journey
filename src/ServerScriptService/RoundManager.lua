@@ -111,6 +111,7 @@ local function runSeekingPhase()
 	end
 
 	services.ScoreService.StartRoundTracking(currentHiders, currentSeekers)
+	services.ScoreService.StartMissedPointTracking()
 	services.CatchService.StartSeekingPhase(currentHiders)
 	services.WhistleService.StartSeekingPhase(currentHiders)
 
@@ -170,6 +171,7 @@ local function runRoundEnd()
 		end
 	end
 
+	services.ScoreService.EndMissedPointTracking()
 	local results = services.ScoreService.BuildRoundResults(currentHiders, currentSeekers)
 	services.CatchService.EndRound()
 	services.WhistleService.EndRound()
@@ -227,6 +229,7 @@ local function gameLoop()
 
 			if not ok then
 				warn("[MecchaChameleon] Ошибка в раунде, сбрасываю в лобби: " .. tostring(err))
+				services.ScoreService.EndMissedPointTracking()
 				services.CatchService.EndRound()
 				services.WhistleService.EndRound()
 				for _, player in ipairs(getAvailablePlayers()) do

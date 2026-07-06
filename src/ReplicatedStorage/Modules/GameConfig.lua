@@ -59,6 +59,20 @@ GameConfig.CATCH_MAX_DISTANCE = 8          -- на каком расстояни
 GameConfig.CATCH_DISTANCE_TOLERANCE = 4    -- запас на задержку сети/движение при серверной проверке дистанции
 GameConfig.CATCH_HOLD_DURATION = 0.6       -- сколько держать кнопку "Поймать" (мешает случайным тапам)
 
+-- === Очки: базовые + Missed Point Ranking (см. DECISIONS.md, п.22) ===
+-- Как часто проверять, не видит ли какой-нибудь Seeker текущего Hider -
+-- не чаще раза в 1-2 секунды (не за каждый кадр), чтобы не грузить сервер
+-- лишними raycast-проверками на каждую пару Seeker-Hider (см. CLAUDE.md).
+GameConfig.MISSED_POINT_CHECK_INTERVAL_SECONDS = 1.5
+-- Дистанция "в зоне видимости" для Missed Point Ranking - заметно больше
+-- дистанции поимки (CATCH_MAX_DISTANCE), т.к. тут речь не о "можно схватить",
+-- а о "теоретически мог бы заметить, но не заметил".
+GameConfig.MISSED_POINT_MAX_DISTANCE = 50
+GameConfig.MISSED_POINT_PER_TICK = 3 -- очков за каждый тик "замечен, но не пойман"
+-- Отдельный флат-бонус за то, что дожил до конца раунда - помимо очков за
+-- каждую прожитую секунду (POINTS_PER_SECOND_HIDDEN в ScoreService.lua).
+GameConfig.SURVIVAL_BONUS_POINTS = 50
+
 -- Части тела, которые разрешено красить (имена BasePart в модели персонажа).
 -- Список покрывает и R15, и R6 риги (см. DECISIONS.md, п.8).
 GameConfig.PAINTABLE_PART_NAMES = {

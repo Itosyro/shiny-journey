@@ -36,6 +36,7 @@ function RoundUIClient.Init(remotesFolder)
 	local timerRemote = remotesFolder:WaitForChild("RoundTimerTick")
 	local caughtRemote = remotesFolder:WaitForChild("PlayerCaught")
 	local resultsRemote = remotesFolder:WaitForChild("RoundResults")
+	local missedPointRemote = remotesFolder:WaitForChild("MissedPointRankingUpdate")
 
 	local currentPhase = "Lobby"
 
@@ -64,10 +65,12 @@ function RoundUIClient.Init(remotesFolder)
 			resultsUI.Hide()
 			hud.SetRoleText("")
 			hud.SetFoundText("")
+			hud.SetMissedPointText("")
 		elseif state == "Hiding" then
 			resultsUI.Hide()
 			updateRoleText()
 			hud.SetFoundText("")
+			hud.SetMissedPointText("")
 		elseif state == "Seeking" then
 			updateRoleText()
 		elseif state == "RoundEnd" then
@@ -97,6 +100,13 @@ function RoundUIClient.Init(remotesFolder)
 
 	resultsRemote.OnClientEvent:Connect(function(results)
 		resultsUI.Show(results)
+	end)
+
+	-- Личный фидбек Missed Point Ranking (см. DECISIONS.md, п.22) - сервер
+	-- шлёт это событие только самому Hider'у, поэтому никакой проверки роли
+	-- тут не нужно: если это событие вообще пришло, значит получатель - Hider.
+	missedPointRemote.OnClientEvent:Connect(function(total)
+		hud.SetMissedPointText(string.format("Замечен, но не пойман! Маскировка: %d", total))
 	end)
 end
 
