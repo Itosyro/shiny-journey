@@ -7,6 +7,9 @@
 -- возвращается в общий пул для распределения ролей.
 
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
 
 -- Только для проверки текущей фазы раунда (RoundManager.State) - тот же
 -- паттерн, что уже используется в FreezeService/PaintService, см. их
@@ -52,24 +55,31 @@ local function hideAndImmobilize(character)
 	end
 end
 
--- Переводит игрока в режим зрителя: команда, скрытие персонажа, включение
--- клиентской "лётной" камеры.
-function SpectatorService.EnterSpectator(player)
-	if isFullSpectator[player] then
-		return -- уже зритель
-	end
+-- Общая часть перехода в режим зрителя: команда, скрытие персонажа (если уже
+-- заспавнен), уведомление клиента. Вынесена отдельно, т.к. нужна и из
+-- EnterSpectator (первый вход), и из обработчика CharacterAdded ниже (тот же
+-- игрок повторно заспавнился, пока всё ещё зритель).
+local function becomeSpectator(player, character)
 	isFullSpectator[player] = true
 
 	if PlayerRoleServiceRef then
 		PlayerRoleServiceRef.SetSpectator(player)
 	end
 
-	local character = player.Character
 	if character then
 		hideAndImmobilize(character)
 	end
 
 	sendModeChanged(player, true)
+end
+
+-- Переводит игрока в режим зрителя: команда, скрытие персонажа, включение
+-- клиентской "лётной" камеры.
+function SpectatorService.EnterSpectator(player)
+	if isFullSpectator[player] then
+		return -- уже зритель
+	end
+	becomeSpectator(player, player.Character)
 end
 
 -- Возвращает игрока к обычной игре, когда следующий раунд назначил ему роль
@@ -97,15 +107,35 @@ function SpectatorService.Init(remotes, playerRoleService)
 
 	Players.PlayerAdded:Connect(function(player)
 		player.CharacterAdded:Connect(function(character)
-			-- Не Lobby - значит идёт активная фаза (Hiding/Seeking/RoundEnd),
-			-- присоединившийся посреди неё становится зрителем до конца раунда.
-			-- Если игрок уже был зрителем (например, это повторный респавн
-			-- посреди той же фазы) - тоже применяем скрытие снова.
-			if isFullSpectator[player] or RoundManager.State ~= "Lobby" then
-				isFullSpectator[player] = true
+			if isFullSpectator[player] then
+				-- Уже был зрителем - это повторный респавн (например, персонаж
+				-- провалился в бесконечность), применяем скрытие снова к новому телу.
 				hideAndImmobilize(character)
 				sendModeChanged(player, true)
+				return
 			end
+
+			if RoundManager.State == "Lobby" then
+				return
+			end
+
+			-- Игрок уже участвует в текущем раунде как Hider/Seeker (роль
+			-- назначена в PlayerRoleService.AssignRoles, команда выставлена) -
+			-- CharacterAdded здесь означает не "новый игрок зашёл посреди
+			-- раунда", а обычный респавн уже играющего (например, кнопка
+			-- "Reset Character" в меню паузы). Зрителем становиться не нужно -
+			-- иначе живой Hider/Seeker окажется невидимым и обездвиженным до
+			-- конца раунда без возможности играть дальше.
+			local team = player.Team
+			local isActiveRoundParticipant = team ~= nil
+				and (team.Name == GameConfig.TEAM_HIDERS_NAME or team.Name == GameConfig.TEAM_SEEKERS_NAME)
+			if isActiveRoundParticipant then
+				return
+			end
+
+			-- Действительно новый зритель: зашёл посреди активной фазы (Hiding/
+			-- Seeking/RoundEnd) и ещё не участвует в текущем раунде.
+			becomeSpectator(player, character)
 		end)
 	end)
 

@@ -83,6 +83,14 @@ local function teleportToReservedServer(player, accessCode)
 end
 
 local function onCreatePrivateRoom(player, rawPassword)
+	-- Тот же лимит, что и у входа по паролю - без него читер мог бы спамить
+	-- реальные ReserveServerAsync/MemoryStoreService-запросы без ограничений
+	-- (создание комнаты - как минимум не более дешёвая операция, чем вход).
+	if isRateLimited(player) then
+		sendError(player, "Слишком много попыток - подожди немного и попробуй снова")
+		return
+	end
+
 	local password = normalizePassword(rawPassword)
 
 	if not isValidPassword(password) then
@@ -97,11 +105,20 @@ local function onCreatePrivateRoom(player, rawPassword)
 	-- Проверяем, не занят ли уже этот пароль другой активной комнатой - иначе
 	-- новая запись в MemoryStore перезаписала бы старую, и друзья, уже
 	-- играющие в первой комнате, стали бы недостижимы по этому паролю.
+	-- Важно не спутать "запрос не удался" с "пароль свободен" - иначе
+	-- временный сбой MemoryStoreService тихо перезаписал бы чужую активную
+	-- комнату вместо явной ошибки создателю.
 	local existingOk, existingCode = pcall(function()
 		return passwordMap:GetAsync(password)
 	end)
 
-	if existingOk and existingCode then
+	if not existingOk then
+		sendError(player, "Не удалось создать комнату, попробуй ещё раз")
+		warn("[MecchaChameleon] MemoryStore GetAsync (create-check) failed: " .. tostring(existingCode))
+		return
+	end
+
+	if existingCode then
 		sendError(player, "Этот пароль уже занят - выбери другой")
 		return
 	end

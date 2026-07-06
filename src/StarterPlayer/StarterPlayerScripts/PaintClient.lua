@@ -20,6 +20,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
 local BrushGeometry = require(ReplicatedStorage.Modules.BrushGeometry)
+local RoleUtil = require(ReplicatedStorage.Modules.RoleUtil)
 local PaletteUIBuilder = require(script.Parent.UI.PaletteUIBuilder)
 local BrushControlsUIBuilder = require(script.Parent.UI.BrushControlsUIBuilder)
 
@@ -48,6 +49,12 @@ local strokeBuffer = {}
 local paintRemote
 local previousCameraType
 local paintCameraConnection
+local currentPhase = "Lobby"
+
+-- Панели кисти/пипетки видны только Hiders и только в фазу Hiding - именно тогда
+-- сервер разрешает красить (см. PaintService.SetPaintingAllowed в RoundManager).
+-- Тот же паттерн клиентского зеркалирования серверного ограничения, что и в
+-- FreezeClient.lua - заодно убирает лишний UI с экрана лобби (см. DECISIONS.md, п.21).
 
 -- === Пипетка (логика та же, что и раньше - меняется только то, что делается с
 -- выбранным цветом дальше: раньше сразу заливала часть тела, теперь только
@@ -248,6 +255,33 @@ function PaintClient.Init(remotesFolder)
 		end,
 	})
 
+	local function updatePanelAvailability()
+		local available = RoleUtil.IsHider(player) and currentPhase == "Hiding"
+		paletteUI.Root.Visible = available
+		brushControlsUI.Root.Visible = available
+		inkLabel.Visible = available
+
+		if not available then
+			-- Убираем из режима кисти/пипетки, если панель прячется посреди
+			-- активного использования (смена фазы или превращение в Seeker
+			-- в режиме Infection, см. DECISIONS.md, п.18) - иначе покрасочная
+			-- камера/пипетка останутся включены без видимого UI для их выключения.
+			exitPaintMode(brushControlsUI)
+			eyedropperActive = false
+			paletteUI.SetEyedropperActive(false)
+		end
+	end
+
+	local roundStateRemote = remotesFolder:WaitForChild("RoundStateChanged")
+	roundStateRemote.OnClientEvent:Connect(function(state)
+		currentPhase = state
+		updatePanelAvailability()
+	end)
+
+	player:GetPropertyChangedSignal("Team"):Connect(updatePanelAvailability)
+
+	updatePanelAvailability()
+
 	-- InputBegan одинаково работает и для мыши (MouseButton1), и для тача на телефоне (Touch).
 	UserInputService.InputBegan:Connect(function(input, gameProcessedEvent)
 		if gameProcessedEvent then
@@ -293,6 +327,7 @@ function PaintClient.Init(remotesFolder)
 	-- чтобы не держать камеру в Scriptable "в никуда" на новом теле
 	player.CharacterAdded:Connect(function()
 		exitPaintMode(brushControlsUI)
+		updatePanelAvailability()
 	end)
 
 	task.spawn(strokeBatchLoop)

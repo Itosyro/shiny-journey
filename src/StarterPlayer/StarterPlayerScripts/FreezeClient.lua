@@ -8,7 +8,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
+local RoleUtil = require(ReplicatedStorage.Modules.RoleUtil)
 local PosePickerUIBuilder = require(script.Parent.UI.PosePickerUIBuilder)
 
 local player = Players.LocalPlayer
@@ -18,21 +18,15 @@ local FreezeClient = {}
 local currentPhase = "Lobby"
 local freezeRemote
 
--- Панель видна только Hiders и активна только в фазу пряток (Hiding) - это
--- клиентское зеркало серверного ограничения в FreezeService.onRequestFreeze
--- (см. DECISIONS.md, п.13). Даже если бы кто-то обошёл клиент, сервер всё
--- равно откажет - это лишь UX, чтобы Seeker не видел бесполезную панель.
-local function isHider()
-	return player.Team ~= nil and player.Team.Name == GameConfig.TEAM_HIDERS_NAME
-end
-
 local function updatePanelAvailability(panel)
 	-- Панель доступна ТОЛЬКО в фазе Hiding (см. требование задачи) - полностью
 	-- скрываем её в остальных фазах и для Seekers. Полное скрытие, а не просто
 	-- затемнение: Frame.Active не блокирует клики по дочерним кнопкам (в отличие
 	-- от TextButton.Active у старой одиночной кнопки), поэтому только Visible
-	-- надёжно защищает от нажатий, когда переключать позу нельзя.
-	panel.Root.Visible = isHider() and currentPhase == "Hiding"
+	-- надёжно защищает от нажатий, когда переключать позу нельзя. Это лишь
+	-- клиентское зеркало серверного ограничения в FreezeService.onRequestFreeze
+	-- (см. DECISIONS.md, п.13) - даже обойдя клиент, сервер всё равно откажет.
+	panel.Root.Visible = RoleUtil.IsHider(player) and currentPhase == "Hiding"
 end
 
 function FreezeClient.Init(remotesFolder)

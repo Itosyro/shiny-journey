@@ -12,6 +12,8 @@ local FreezeService = require(script.Parent.FreezeService)
 local CatchService = require(script.Parent.CatchService)
 local ScoreService = require(script.Parent.ScoreService)
 local WhistleService = require(script.Parent.WhistleService)
+local PrivateRoomService = require(script.Parent.PrivateRoomService)
+local SpectatorService = require(script.Parent.SpectatorService)
 local RoundManager = require(script.Parent.RoundManager)
 
 PlayerRoleService.Init()
@@ -20,6 +22,8 @@ FreezeService.Init(remotes, PaintService)
 ScoreService.Init()
 CatchService.Init(remotes, ScoreService)
 WhistleService.Init(remotes, CatchService)
+PrivateRoomService.Init(remotes)
+SpectatorService.Init(remotes, PlayerRoleService)
 
 RoundManager.Init(remotes, {
 	PlayerRoleService = PlayerRoleService,
@@ -28,6 +32,7 @@ RoundManager.Init(remotes, {
 	CatchService = CatchService,
 	ScoreService = ScoreService,
 	WhistleService = WhistleService,
+	SpectatorService = SpectatorService,
 })
 
 RoundManager.Start()

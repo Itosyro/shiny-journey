@@ -204,16 +204,15 @@ local function gameLoop()
 		if #getAvailablePlayers() >= GameConfig.MIN_PLAYERS_TO_START then
 			currentHiders, currentSeekers = services.PlayerRoleService.AssignRoles(getAvailablePlayers())
 
-			-- Всем, кому только что назначили роль Hider/Seeker, снимаем режим
-			-- зрителя - на случай, если кто-то из них зашёл на сервер посреди
-			-- прошлого раунда и до сих пор летает (см. SpectatorService.lua,
-			-- DECISIONS.md, п.21). Делаем это именно тут, пока RoundManager.State
-			-- ещё "Lobby" - ExitSpectator вызывает LoadCharacter, а обработчик
-			-- CharacterAdded в SpectatorService.Init проверяет как раз это поле.
-			for _, player in ipairs(currentHiders) do
-				services.SpectatorService.ExitSpectator(player)
-			end
-			for _, player in ipairs(currentSeekers) do
+			-- Всем, кому только что назначили роль Hider/Seeker (то есть всем
+			-- доступным игрокам - AssignRoles распределяет их без остатка),
+			-- снимаем режим зрителя - на случай, если кто-то из них зашёл на
+			-- сервер посреди прошлого раунда и до сих пор летает (см.
+			-- SpectatorService.lua, DECISIONS.md, п.21). Делаем это именно тут,
+			-- пока RoundManager.State ещё "Lobby" - ExitSpectator вызывает
+			-- LoadCharacter, а обработчик CharacterAdded в SpectatorService.Init
+			-- проверяет команду игрока, которую AssignRoles выше уже выставил.
+			for _, player in ipairs(getAvailablePlayers()) do
 				services.SpectatorService.ExitSpectator(player)
 			end
 
