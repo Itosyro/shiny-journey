@@ -6,19 +6,24 @@ local GameConfig = {}
 
 -- === Игроки и лобби ===
 GameConfig.MIN_PLAYERS_TO_START = 2
-GameConfig.MAX_PLAYERS = 10
+-- MAX_PLAYERS здесь - только справочное значение для внутренних расчётов
+-- (например, чтобы формула Seekers ниже проверялась и на верхней границе).
+-- Реальный лимит игроков на сервер задаётся НЕ кодом, а в Creator Dashboard
+-- (Experience Settings -> Basic Settings -> Max Players) - см. README.md.
+-- См. DECISIONS.md, п.19 - диапазон уточнён на 2-24 по факту устройства
+-- публичных лобби оригинала (раньше ошибочно считали, что 2-10).
+GameConfig.MAX_PLAYERS = 24
 GameConfig.LOBBY_COUNTDOWN_SECONDS = 15 -- отсчёт перед стартом раунда после набора минимума игроков
--- Целевой баланс (не жёсткое ограничение): формулы Seekers/тайминги в первую
--- очередь настроены и проверяются на серверах с 6-8 игроками одновременно -
--- см. DECISIONS.md, п.16. 2-10 остаётся диапазоном, который сервер допускает.
-GameConfig.TARGET_PLAYERS_FOR_BALANCE = 7
 
--- === Роли ===
--- Сколько искателей (Seekers) назначаем в зависимости от числа игроков в раунде.
--- Формула: 1 искатель на каждые 4 игрока, минимум 1, максимум 3 (см. DECISIONS.md, п.6).
-GameConfig.SEEKERS_PER_PLAYERS = 4
+-- === Роли (см. DECISIONS.md, п.19) ===
+-- Сколько игроков приходится на одного Seeker. Два отдельных значения, а не
+-- одно - в Infection специально стартуем с МЕНЬШИМ числом Seekers, чем в
+-- Classic, потому что оно всё равно вырастет по ходу раунда (пойманные Hiders
+-- становятся Seekers) - см. PlayerRoleService.calculateSeekersCount.
+GameConfig.SEEKERS_PER_PLAYERS_CLASSIC = 5   -- Classic: число Seekers не меняется в раунде
+GameConfig.SEEKERS_PER_PLAYERS_INFECTION = 8 -- Infection: старт меньше, дальше растёт само
 GameConfig.MIN_SEEKERS = 1
-GameConfig.MAX_SEEKERS = 3
+GameConfig.MAX_SEEKERS = 5
 
 -- === Тайминги фаз раунда (в секундах) ===
 GameConfig.HIDING_PHASE_DURATION = 30    -- время на покраску и прятки, искатели ждут в комнате
@@ -81,5 +86,20 @@ GameConfig.WHISTLE_ROLLOFF_MAX_DISTANCE = 60  -- дальше этого рас�
 GameConfig.TEAM_HIDERS_NAME = "Hiders"
 GameConfig.TEAM_SEEKERS_NAME = "Seekers"
 GameConfig.TEAM_SPECTATORS_NAME = "Spectators"
+
+-- === Приватные комнаты (Custom Game с паролем) - см. DECISIONS.md, п.20 ===
+GameConfig.PRIVATE_ROOM_PASSWORD_MIN_LENGTH = 4
+GameConfig.PRIVATE_ROOM_PASSWORD_MAX_LENGTH = 20
+-- Сколько живёт связка "пароль -> код сервера" в MemoryStoreService, пока
+-- никто не зашёл. 6 часов - с запасом на "друзья собираются поиграть вечером",
+-- но не 45-дневный максимум MemoryStore, чтобы не копить пароли навсегда.
+GameConfig.PRIVATE_ROOM_PASSWORD_TTL_SECONDS = 6 * 60 * 60
+-- Защита от подбора пароля: не больше стольки попыток "Присоединиться" за
+-- окно времени с одного игрока.
+GameConfig.PRIVATE_ROOM_JOIN_ATTEMPT_LIMIT = 5
+GameConfig.PRIVATE_ROOM_JOIN_ATTEMPT_WINDOW_SECONDS = 60
+
+-- === Зритель (Spectator) для зашедших посреди раунда - см. DECISIONS.md, п.21 ===
+GameConfig.SPECTATOR_FLY_SPEED = 40 -- стадов в секунду
 
 return GameConfig

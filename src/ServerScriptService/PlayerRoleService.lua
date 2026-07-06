@@ -5,6 +5,7 @@ local Teams = game:GetService("Teams")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
+local GameMode = require(ReplicatedStorage.Modules.GameMode)
 
 local PlayerRoleService = {}
 
@@ -32,9 +33,16 @@ function PlayerRoleService.GetTeams()
 	return hidersTeam, seekersTeam, spectatorsTeam
 end
 
--- Сколько искателей назначать на такое количество игроков (см. DECISIONS.md, п.6)
+-- Сколько искателей назначать на такое количество игроков (см. DECISIONS.md, п.19).
+-- В Infection стартуем с меньшим числом Seekers, чем в Classic - оно всё равно
+-- вырастет по ходу раунда (пойманные Hiders становятся Seekers, см. GameMode.lua),
+-- поэтому используем более "редкий" делитель для старта.
 local function calculateSeekersCount(totalPlayers)
-	local count = math.floor(totalPlayers / GameConfig.SEEKERS_PER_PLAYERS)
+	local playersPerSeeker = GameMode.Current == GameMode.Infection
+		and GameConfig.SEEKERS_PER_PLAYERS_INFECTION
+		or GameConfig.SEEKERS_PER_PLAYERS_CLASSIC
+
+	local count = math.floor(totalPlayers / playersPerSeeker)
 	count = math.max(GameConfig.MIN_SEEKERS, count)
 	count = math.min(GameConfig.MAX_SEEKERS, count)
 	-- Искателей не может быть больше, чем игроков минус хотя бы 1 прячущийся

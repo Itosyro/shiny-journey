@@ -15,7 +15,7 @@ local RoundManager = {}
 RoundManager.State = "Lobby" -- Lobby | Hiding | Seeking | RoundEnd
 
 local remotesRef
-local services -- {PlayerRoleService, PaintService, FreezeService, CatchService, ScoreService, WhistleService}
+local services -- {PlayerRoleService, PaintService, FreezeService, CatchService, ScoreService, WhistleService, SpectatorService}
 
 local currentHiders = {}
 local currentSeekers = {}
@@ -179,10 +179,16 @@ local function runRoundEnd()
 
 	runTimer(GameConfig.ROUND_END_DISPLAY_DURATION)
 
-	-- Возвращаем всех в наблюдатели на время следующего лобби - роли назначатся заново
+	-- Возвращаем всех в наблюдатели на время следующего лобби - роли назначатся заново.
+	-- Игрокам в полном режиме зрителя (SpectatorService, DECISIONS.md п.21) не
+	-- возвращаем WalkSpeed - их HumanoidRootPart всё ещё заанкорен, а движением
+	-- управляет SpectatorClient напрямую через CFrame, обычная ходьба тут не нужна
+	-- и не должна путать состояние Humanoid до самого следующего ExitSpectator.
 	for _, player in ipairs(getAvailablePlayers()) do
 		services.PlayerRoleService.SetSpectator(player)
-		setWalkable(player, true)
+		if not services.SpectatorService.IsSpectating(player) then
+			setWalkable(player, true)
+		end
 	end
 end
 
@@ -197,6 +203,19 @@ local function gameLoop()
 
 		if #getAvailablePlayers() >= GameConfig.MIN_PLAYERS_TO_START then
 			currentHiders, currentSeekers = services.PlayerRoleService.AssignRoles(getAvailablePlayers())
+
+			-- Всем, кому только что назначили роль Hider/Seeker, снимаем режим
+			-- зрителя - на случай, если кто-то из них зашёл на сервер посреди
+			-- прошлого раунда и до сих пор летает (см. SpectatorService.lua,
+			-- DECISIONS.md, п.21). Делаем это именно тут, пока RoundManager.State
+			-- ещё "Lobby" - ExitSpectator вызывает LoadCharacter, а обработчик
+			-- CharacterAdded в SpectatorService.Init проверяет как раз это поле.
+			for _, player in ipairs(currentHiders) do
+				services.SpectatorService.ExitSpectator(player)
+			end
+			for _, player in ipairs(currentSeekers) do
+				services.SpectatorService.ExitSpectator(player)
+			end
 
 			-- Оборачиваем раунд в pcall: если внутри фазы случится ошибка, весь игровой
 			-- цикл не должен умереть навсегда (иначе сервер зависнет без раундов).
@@ -214,7 +233,9 @@ local function gameLoop()
 				for _, player in ipairs(getAvailablePlayers()) do
 					services.FreezeService.ForceUnfreeze(player)
 					services.PlayerRoleService.SetSpectator(player)
-					setWalkable(player, true)
+					if not services.SpectatorService.IsSpectating(player) then
+						setWalkable(player, true)
+					end
 				end
 			end
 		end

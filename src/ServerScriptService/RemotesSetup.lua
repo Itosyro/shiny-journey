@@ -20,6 +20,10 @@ local REMOTE_EVENT_NAMES = {
 	"HideCatchPromptsFromHiders", -- сервер -> клиент (только Hiders): локально скрыть подсказки "Поймать"
 	"RequestWhistle",         -- клиент -> сервер: свистнуть прямо сейчас (см. DECISIONS.md, п.15)
 	"WhistleCountdownUpdate", -- сервер -> клиент (только Hiders): секунд до следующего свистка
+	"CreatePrivateRoom",  -- клиент -> сервер: создать приватную комнату с паролем (см. DECISIONS.md, п.20)
+	"JoinPrivateRoom",    -- клиент -> сервер: зайти в приватную комнату по паролю
+	"PrivateRoomError",   -- сервер -> клиент: не удалось создать/зайти (текст причины)
+	"SpectatorModeChanged", -- сервер -> клиент: включить/выключить режим зрителя (см. DECISIONS.md, п.21)
 }
 
 function RemotesSetup.Init()
