@@ -138,16 +138,20 @@ buildLobbyPlatform` (заменила `buildSeekerWaitingRoom`) - остальн
   ожидания при переходе в Seeking (не было телепорта наружу, только снятие
   `setWalkable(false)`).
 
-## Внешность персонажа (ЗАПЛАНИРОВАНО — см. `MEGA_PLAN.md` Часть 2)
+## Внешность персонажа (этап 1 готово — см. `MEGA_PLAN.md` Часть 2, `DECISIONS.md` п.26)
 
-- **`CharacterStyleService.lua`** (новый, ServerScriptService): на
-  `CharacterAdded` красит все `BasePart` персонажа в `BASE_BODY_COLOR`
-  (белый) + `SmoothPlastic`. НЕ трогает `Transparency` (чтобы не
-  конфликтовать со `SpectatorService.hideAndImmobilize`).
-- **`StarterPlayer.LoadCharacterAppearance = false`** — платформенное
-  отключение каталожной косметики (не код-велосипед). Риг R15 (настройка
-  места → README). Округлые формы через `HumanoidDescription`/бандл —
-  этап 2, только на живой сессии со Studio.
+- **`CharacterStyleService.lua`** (новый, ServerScriptService, готово): на
+  `CharacterAdded` красит все `BasePart` персонажа (кроме
+  `HumanoidRootPart`) в `GameConfig.BASE_BODY_COLOR` (тёплый белый) +
+  `SmoothPlastic`. НЕ трогает `Transparency` (чтобы не конфликтовать со
+  `SpectatorService.hideAndImmobilize`). Удаляет `Head.face`, если он
+  есть - авторы подтвердили полностью безликий стиль (вопрос был
+  открытым в MEGA_PLAN 2.2.2, ответ зафиксирован в `DECISIONS.md`, п.26).
+- **`StarterPlayer.LoadCharacterAppearance = false`** (готово, в
+  `Main.server.lua`) — платформенное отключение каталожной косметики (не
+  код-велосипед). Риг R15 (настройка места → README, ручная). Округлые
+  формы через `HumanoidDescription`/бандл — этап 2 (`TASKS.md` B2.2), ещё
+  не реализовано, только на живой сессии со Studio.
 
 Общие модули `ReplicatedStorage/Modules/`:
 - `BrushGeometry.lua` — используется и клиентом (`PaintClient`, чтобы понять,

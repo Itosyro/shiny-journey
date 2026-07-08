@@ -116,6 +116,10 @@ GameConfig.WHISTLE_VOLUME = 1
 GameConfig.WHISTLE_ROLLOFF_MIN_DISTANCE = 5   -- ближе этого расстояния звук на полной громкости
 GameConfig.WHISTLE_ROLLOFF_MAX_DISTANCE = 60  -- дальше этого расстояния звук не слышен
 
+-- === Внешность персонажа (см. DECISIONS.md, п.26, MEGA_PLAN.md Часть 2) ===
+-- Чуть тёплый белый - чистый 255 сливается с бликами SmoothPlastic.
+GameConfig.BASE_BODY_COLOR = Color3.fromRGB(240, 240, 240)
+
 -- === Команды ===
 GameConfig.TEAM_HIDERS_NAME = "Hiders"
 GameConfig.TEAM_SEEKERS_NAME = "Seekers"

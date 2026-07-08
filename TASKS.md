@@ -247,12 +247,16 @@ S1-S9). Развёрнутые рецепты этих багов продубл
 
 ### B2. Визуальный стиль персонажей (MEGA_PLAN Часть 2)
 
-- [ ] **B2.1** Белый стиль, этап 1 (MEGA_PLAN 2.2):
-  `LoadCharacterAppearance=false`; новый `CharacterStyleService.lua`
-  (белый цвет + SmoothPlastic всем частям); `BASE_BODY_COLOR` в
-  GameConfig; R15 в Game Settings (ручная настройка → README).
-  ВОПРОС АВТОРАМ перед реализацией: удалять ли дефолтное лицо (безликий
-  стиль)? До ответа — не удалять.
+- [x] **B2.1** Белый стиль, этап 1 (MEGA_PLAN 2.2): `game:GetService(
+  "StarterPlayer").LoadCharacterAppearance = false` в `Main.server.lua`;
+  новый `CharacterStyleService.lua` (белый цвет + SmoothPlastic всем
+  частям, кроме HumanoidRootPart); `GameConfig.BASE_BODY_COLOR`.
+  ВОПРОС АВТОРАМ задан и ОТВЕЧЕН: лицо (`Head.face`) удаляется -
+  полностью безликий стиль, `CharacterStyleService` его удаляет. R15 в
+  Game Settings задокументирован как ручная настройка в README.md.
+  См. `DECISIONS.md`, п.26. ✅ Реализовано.
+  ✔ Живой тест (нужна автором): все игроки выглядят одинаково - белые
+  гладкие манекены без одежды/лица; мазки кисти видны.
 - [ ] **B2.2** Округлые формы, этап 2 (MEGA_PLAN 2.3): ТОЛЬКО на живой
   сессии со Studio — подбор бандла/HumanoidDescription. Не делать из
   облака вслепую.
