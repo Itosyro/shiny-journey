@@ -63,6 +63,29 @@ function LobbyUIBuilder.Create(screenGui, options)
 	listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	listLayout.Parent = scrollFrame
 
+	-- Тоггл режима (Classic/Infection, см. DECISIONS.md, п.30) - в свободном
+	-- промежутке между списком игроков и кнопками приватных комнат.
+	local gameModeButton = Instance.new("TextButton")
+	gameModeButton.Name = "GameModeButton"
+	gameModeButton.Size = UDim2.new(1, -20, 0, 28)
+	gameModeButton.Position = UDim2.new(0, 10, 0, 222)
+	gameModeButton.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+	gameModeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+	gameModeButton.Font = Enum.Font.GothamBold
+	gameModeButton.TextScaled = true
+	gameModeButton.Text = "Режим: Infection ▸"
+	gameModeButton.Parent = root
+
+	local gameModeButtonCorner = Instance.new("UICorner")
+	gameModeButtonCorner.CornerRadius = UDim.new(0, 8)
+	gameModeButtonCorner.Parent = gameModeButton
+
+	gameModeButton.MouseButton1Click:Connect(function()
+		if options.OnToggleGameMode then
+			options.OnToggleGameMode()
+		end
+	end)
+
 	local buttonsRow = Instance.new("Frame")
 	buttonsRow.BackgroundTransparency = 1
 	buttonsRow.Size = UDim2.new(1, -20, 0, 44)
@@ -257,6 +280,9 @@ function LobbyUIBuilder.Create(screenGui, options)
 		end,
 		SetStatusText = function(text)
 			statusLabel.Text = text
+		end,
+		SetGameModeText = function(text)
+			gameModeButton.Text = text
 		end,
 		UpdatePlayers = function(players)
 			clearPlayerRows()

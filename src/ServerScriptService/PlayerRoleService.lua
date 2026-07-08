@@ -39,7 +39,7 @@ end
 -- вырастет по ходу раунда (пойманные Hiders становятся Seekers, см. GameMode.lua),
 -- поэтому используем более "редкий" делитель для старта.
 local function calculateSeekersCount(totalPlayers)
-	local playersPerSeeker = GameMode.Current == GameMode.Infection
+	local playersPerSeeker = GameMode.GetCurrent() == GameMode.Infection
 		and GameConfig.SEEKERS_PER_PLAYERS_INFECTION
 		or GameConfig.SEEKERS_PER_PLAYERS_CLASSIC
 

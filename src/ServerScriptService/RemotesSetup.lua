@@ -28,6 +28,7 @@ local REMOTE_EVENT_NAMES = {
 	"PrivateRoomError",   -- сервер -> клиент: не удалось создать/зайти (текст причины)
 	"SpectatorModeChanged", -- сервер -> клиент: включить/выключить режим зрителя (см. DECISIONS.md, п.21)
 	"MissedPointRankingUpdate", -- сервер -> клиент (только сам Hider): личный счётчик Missed Point Ranking (см. DECISIONS.md, п.22)
+	"RequestGameMode", -- клиент -> сервер: сменить режим (Classic/Infection) на следующий раунд (см. DECISIONS.md, п.30)
 }
 
 function RemotesSetup.Init()

@@ -99,7 +99,7 @@ function RoundUIClient.Init(remotesFolder)
 	end)
 
 	caughtRemote.OnClientEvent:Connect(function(hiderName, seekerName, remainingCount)
-		if hiderName == player.Name and GameMode.Current == GameMode.Infection then
+		if hiderName == player.Name and GameMode.GetCurrent() == GameMode.Infection then
 			-- Личное уведомление тому, кого только что поймали - роль сменилась
 			-- незаметно (без перезахода/лобби), стоит явно объяснить, что произошло.
 			hud.SetFoundText("Тебя поймали! Теперь ты Искатель - лови остальных!")

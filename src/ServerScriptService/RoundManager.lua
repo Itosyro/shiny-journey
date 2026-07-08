@@ -251,7 +251,7 @@ local function runSeekingPhase()
 	-- Seeker. В режиме Classic этот обработчик ничего не делает - пойманный
 	-- просто остаётся "найденным" до конца раунда, как и раньше.
 	services.CatchService.OnCatch(function(hiderPlayer, seekerPlayer)
-		if GameMode.Current ~= GameMode.Infection then
+		if GameMode.GetCurrent() ~= GameMode.Infection then
 			return
 		end
 
@@ -398,9 +398,28 @@ local function removeFromRoleLists(player)
 	end
 end
 
+-- Смена режима на следующий раунд (см. GameMode.lua, DECISIONS.md, п.30) -
+-- любой игрок в лобби может переключить, применяется только на СЛЕДУЮЩИЙ
+-- раунд (calculateSeekersCount/OnCatch и так уже читают режим один раз в
+-- нужный момент, никакой mid-round-мутации не бывает). Голосование не
+-- делаем (YAGNI) - последний нажавший выигрывает.
+local function onRequestGameMode(_player, mode)
+	if RoundManager.State ~= "Lobby" then
+		return
+	end
+
+	if mode ~= GameMode.Classic and mode ~= GameMode.Infection then
+		return -- не из белого списка - подозрительный пакет
+	end
+
+	GameMode.SetCurrent(mode)
+end
+
 function RoundManager.Init(remotes, injectedServices)
 	remotesRef = remotes
 	services = injectedServices
+
+	remotes.RequestGameMode.OnServerEvent:Connect(onRequestGameMode)
 
 	Players.PlayerRemoving:Connect(removeFromRoleLists)
 end

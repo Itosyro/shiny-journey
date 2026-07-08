@@ -148,6 +148,26 @@ Seeker, ещё мог не иметь персонажа (`LoadCharacter` в
 полную заливку тела кистью (~60-100 мазков). Живой замер FPS —
 только автором в Studio. Следующая задача — V2 (троттлинг рисования).
 
+## 2026-07-08 — B4.1: выбор GameMode в лобби через Attribute
+
+Первая задача `TASKS.md` Раздела B4 (`MEGA_PLAN.md`, 3.4.1) - главный
+TODO из ROADMAP "Бета" (режим раньше переключался только правкой
+константы в коде). Ponytail-решение проблемы репликации: НЕ новый
+`RemoteEvent` на каждое чтение, а `Attribute` на `ReplicatedStorage` -
+платформа реплицирует сама. `GameMode.lua`: константа заменена на
+`GetCurrent()`/`SetCurrent(mode)` + `GetChangedSignal()` (обёртка над
+`GetAttributeChangedSignal`, чтобы клиент не дублировал имя атрибута).
+Все 3 места, читавшие `GameMode.Current` (`PlayerRoleService.
+calculateSeekersCount`, `RoundManager` OnCatch-хук, `RoundUIClient`),
+переведены на `GetCurrent()`. Новый `RemoteEvent RequestGameMode` +
+обработчик `RoundManager.onRequestGameMode` (белый список
+Classic/Infection, только фаза `Lobby`). UI: кнопка-тоггл "Режим:
+Infection ▸" добавлена в существующую `LobbyPanel` (без отдельной зоны
+на платформе и без голосования - оба YAGNI, режим меняет любой игрок в
+лобби, применяется на следующий раунд). Обоснование - `DECISIONS.md`,
+п.30. Живая проверка - только автором. Следующая задача — B4.2 (эффект
+"затвердевания" позы через Highlight).
+
 ## 2026-07-08 — B3.Q1: поимка стала дистанционной меткой (Раздел B3 закрыт)
 
 Третья и последняя задача `TASKS.md` Раздела B3 (самая архитектурно

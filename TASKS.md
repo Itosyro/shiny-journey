@@ -309,7 +309,16 @@ S1-S9). Развёрнутые рецепты этих багов продубл
 
 ### B4. Оптимизация и следующие фичи (MEGA_PLAN 3.3-3.4)
 
-- [ ] **B4.1** Выбор GameMode в лобби через Attribute (MEGA_PLAN 3.4.1).
+- [x] **B4.1** Выбор GameMode в лобби через Attribute (MEGA_PLAN 3.4.1):
+  `GameMode.lua` - константа заменена на `GetCurrent()`/`SetCurrent()`
+  через `Attribute` на `ReplicatedStorage` (+ `GetChangedSignal()` для
+  клиента); все 3 места с `GameMode.Current` переведены на
+  `GetCurrent()`; новый `RemoteEvent RequestGameMode` + обработчик в
+  `RoundManager` (белый список, только фаза `Lobby`); кнопка-тоггл
+  "Режим: Infection ▸" в `LobbyUIBuilder`/`LobbyUIClient` (без
+  голосования - YAGNI). См. `DECISIONS.md`, п.30. ✅ Реализовано.
+  ✔ Живой тест (нужна автором): смена режима в лобби видна всем сразу;
+  раунд идёт по выбранному режиму; mid-round смена невозможна.
 - [ ] **B4.2** Эффект "затвердевания" позы через Highlight
   (MEGA_PLAN 3.4.2).
 - [ ] **B4.3** Сохранение очков через DataStore + `ScorePersistence.lua`

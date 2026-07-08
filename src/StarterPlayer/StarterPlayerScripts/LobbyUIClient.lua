@@ -3,9 +3,11 @@
 -- "Lobby": список игроков, статус ожидания/отсчёта, кнопки приватных комнат.
 
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local player = Players.LocalPlayer
 
+local GameMode = require(ReplicatedStorage.Modules.GameMode)
 local LobbyUIBuilder = require(script.Parent.UI.LobbyUIBuilder)
 
 local LobbyUIClient = {}
@@ -24,6 +26,7 @@ function LobbyUIClient.Init(remotesFolder)
 	local createRoomRemote = remotesFolder:WaitForChild("CreatePrivateRoom")
 	local joinRoomRemote = remotesFolder:WaitForChild("JoinPrivateRoom")
 	local errorRemote = remotesFolder:WaitForChild("PrivateRoomError")
+	local requestGameModeRemote = remotesFolder:WaitForChild("RequestGameMode")
 
 	local currentPhase = "Lobby"
 	-- true, пока сервер шлёт playersNeeded/playersCurrent (см. RoundManager.waitForEnoughPlayers) -
@@ -38,7 +41,20 @@ function LobbyUIClient.Init(remotesFolder)
 		OnJoinRoom = function(password)
 			joinRoomRemote:FireServer(password)
 		end,
+		-- Голосования нет (YAGNI, см. DECISIONS.md, п.30) - любой игрок в лобби
+		-- переключает режим на следующий, последний нажавший выигрывает.
+		OnToggleGameMode = function()
+			local nextMode = (GameMode.GetCurrent() == GameMode.Infection) and GameMode.Classic or GameMode.Infection
+			requestGameModeRemote:FireServer(nextMode)
+		end,
 	})
+
+	local function updateGameModeText()
+		lobbyUI.SetGameModeText(string.format("Режим: %s ▸", GameMode.GetCurrent()))
+	end
+
+	updateGameModeText()
+	GameMode.GetChangedSignal():Connect(updateGameModeText)
 
 	local function refreshPlayerList()
 		lobbyUI.UpdatePlayers(Players:GetPlayers())

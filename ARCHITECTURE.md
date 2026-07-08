@@ -165,11 +165,14 @@ buildLobbyPlatform` (заменила `buildSeekerWaitingRoom`) - остальн
   построить карусель кнопок) и сервером (`FreezeService`, чтобы
   провалидировать присланный `poseId` и применить анимацию/hitbox). См.
   `DECISIONS.md`, п.17.
-- `GameMode.lua` — константа активного режима (`Classic`/`Infection`),
-  читается сервером (`RoundManager`, чтобы решить, что делать при поимке) и
-  может читаться клиентом (например, для формулировки сообщений). См.
-  `DECISIONS.md`, п.18 — там же важный нюанс: это статическая настройка,
-  переключаемая только правкой кода, а не в реальном времени.
+- `GameMode.lua` — активный режим (`Classic`/`Infection`) через
+  `GetCurrent()`/`SetCurrent()`, хранится как `Attribute` на
+  `ReplicatedStorage` (реплицируется платформой сама, см. `DECISIONS.md`,
+  п.30) — читается и сервером (`RoundManager`/`PlayerRoleService`, чтобы
+  решить, что делать при поимке/сколько Seekers), и клиентом
+  (`RoundUIClient`/`LobbyUIClient`, для формулировки сообщений и UI-тоггла
+  режима в лобби). Смена — только сервером, через `RequestGameMode` +
+  валидацию фазы `Lobby` в `RoundManager`.
 - `RoleUtil.lua` — общая проверка `IsHider(player)`/`IsSeeker(player)` по
   `player.Team`, используется клиентскими скриптами (`FreezeClient`,
   `PaintClient`), чтобы клиентское зеркалирование серверных ограничений по
@@ -197,6 +200,7 @@ buildLobbyPlatform` (заменила `buildSeekerWaitingRoom`) - остальн
 | `PrivateRoomError` | сервер → **один** клиент | `message: string` | Не удалось создать/войти (текст причины на русском для показа в UI). |
 | `SpectatorModeChanged` | сервер → **один** клиент | `isSpectating: boolean` | Включить/выключить клиентский режим зрителя (скрытый персонаж + fly-камера), см. `DECISIONS.md`, п.21. |
 | `MissedPointRankingUpdate` | сервер → **только сам Hider** | `total: number` | Личный счётчик Missed Point Ranking (замечен, но не пойман). Seeker это событие никогда не получает - см. `DECISIONS.md`, п.22. |
+| `RequestGameMode` | клиент → сервер | `mode: string` (`"Classic"` \| `"Infection"`) | Сменить режим на следующий раунд. Сервер проверяет белый список и что фаза - `Lobby`, применяет через `GameMode.SetCurrent` (Attribute на `ReplicatedStorage`, реплицируется платформой) - см. `DECISIONS.md`, п.30. |
 
 RemoteFunctions в проекте **не используются** (всё построено на односторонних
 событиях — так проще и безопаснее).
