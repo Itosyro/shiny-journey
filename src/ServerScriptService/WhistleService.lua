@@ -16,6 +16,7 @@ local WhistleService = {}
 
 local nextWhistleAt = {} -- [Player] = tick(), когда сработает следующий свисток
 local whistleSounds = {} -- [Player] = Sound (создаётся один раз и переиспользуется)
+local lastManualWhistleAt = {} -- [Player] = tick() последнего РУЧНОГО свистка (антиспам)
 local remotesRef
 local CatchServiceRef
 
@@ -82,6 +83,13 @@ local function onRequestWhistle(player)
 		return -- уже пойман - свистеть незачем
 	end
 
+	-- Без кулдауна спам-клики по кнопке "Свистнуть" проигрывали бы звук
+	-- заново на каждый клик (см. AUDIT_FABLE5.md, S1).
+	if tick() - (lastManualWhistleAt[player] or 0) < GameConfig.WHISTLE_MANUAL_COOLDOWN_SECONDS then
+		return
+	end
+	lastManualWhistleAt[player] = tick()
+
 	fireWhistle(player)
 end
 
@@ -138,6 +146,7 @@ function WhistleService.Init(remotes, catchService)
 	Players.PlayerRemoving:Connect(function(player)
 		nextWhistleAt[player] = nil
 		whistleSounds[player] = nil
+		lastManualWhistleAt[player] = nil
 	end)
 end
 

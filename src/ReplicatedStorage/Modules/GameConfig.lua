@@ -96,6 +96,7 @@ GameConfig.PAINTABLE_PART_NAMES = {
 
 -- === Свисток (Whistle) - см. DECISIONS.md, п.15 ===
 GameConfig.WHISTLE_AUTO_INTERVAL_SECONDS = 45 -- через сколько секунд молчания срабатывает автосвисток
+GameConfig.WHISTLE_MANUAL_COOLDOWN_SECONDS = 3 -- антиспам ручного свистка (см. AUDIT_FABLE5.md, S1)
 -- ЗАГЛУШКА! Замени на реальный звук свистка, когда загрузишь его в Studio.
 GameConfig.WHISTLE_SOUND_ID = "rbxassetid://0"
 GameConfig.WHISTLE_VOLUME = 1

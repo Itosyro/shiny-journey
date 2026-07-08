@@ -74,11 +74,11 @@ Claude Fable 5 (все 33 .lua-файла построчно). Полный от
 
 ### A3. СРЕДНИЙ (архитектурный долг, мелкие баги)
 
-- [ ] **(S1)** Кулдаун ручного свистка. `WhistleService.lua`: таблица
-  `lastManualWhistleAt[player]`; в `onRequestWhistle` отклонять при
-  `tick() - (lastManualWhistleAt[player] or 0) < 3`; ставить время в
-  `fireWhistle` только для ручного пути (или прямо в onRequestWhistle);
-  чистить в существующем PlayerRemoving.
+- [x] **(S1)** Кулдаун ручного свистка. `WhistleService.lua`: новая
+  таблица `lastManualWhistleAt[player]`, отклоняется спам в
+  `onRequestWhistle` через новую константу
+  `GameConfig.WHISTLE_MANUAL_COOLDOWN_SECONDS` (3с); чистится в
+  существующем PlayerRemoving. ✅ Исправлено.
   ✔ Спам-клики не проигрывают звук чаще раза в 3 секунды.
 - [ ] **(S2)** Убрать три серверные копии `isHider()`. `PaintService.lua`,
   `FreezeService.lua`, `WhistleService.lua`: заменить локальные функции
