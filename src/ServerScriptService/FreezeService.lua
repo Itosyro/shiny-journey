@@ -6,6 +6,8 @@
 -- (см. PaintService.SetPaintingAllowed и DECISIONS.md, п.5, п.10, п.17).
 
 local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
@@ -47,6 +49,32 @@ local function stopPoseAnimations(humanoid)
 	end
 end
 
+-- Визуальный эффект "затвердевания" при входе в позу - встроенный
+-- Highlight, ноль кастомного рендера (ponytail), см. DECISIONS.md, п.31.
+-- Лимит платформы: одновременно рендерится максимум 31 Highlight на
+-- клиенте - у нас пиково ≤24 игроков (GameConfig.MAX_PLAYERS) и каждый
+-- Highlight живёт всего 0.6с, так что в любой момент кадра реально
+-- активна лишь малая часть - безопасно с большим запасом.
+local function playFreezeEffect(character)
+	local highlight = Instance.new("Highlight")
+	highlight.FillColor = Color3.fromRGB(255, 255, 255)
+	highlight.FillTransparency = 0.7
+	highlight.OutlineTransparency = 1
+	highlight.Parent = character
+
+	TweenService:Create(highlight, TweenInfo.new(0.5), { FillTransparency = 1 }):Play()
+	Debris:AddItem(highlight, 0.6)
+
+	local rootPart = character:FindFirstChild("HumanoidRootPart")
+	if rootPart then
+		local sound = Instance.new("Sound")
+		sound.SoundId = GameConfig.FREEZE_SOUND_ID
+		sound.Parent = rootPart
+		sound:Play()
+		Debris:AddItem(sound, 2)
+	end
+end
+
 local function applyFreeze(player, wantsFreeze, poseId)
 	local character = player.Character
 	if not character then
@@ -61,6 +89,8 @@ local function applyFreeze(player, wantsFreeze, poseId)
 	frozenState[player] = wantsFreeze
 
 	if wantsFreeze then
+		playFreezeEffect(character)
+
 		-- Запоминаем текущие значения ровно один раз (чтобы повторный вызов freeze
 		-- - например, переключение на другую позу прямо во время заморозки - не
 		-- сохранил уже применённые/обнулённые значения)

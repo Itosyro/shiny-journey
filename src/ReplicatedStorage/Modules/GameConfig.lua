@@ -116,6 +116,9 @@ GameConfig.PAINTABLE_PART_NAMES = {
 -- Заморозка / поза: см. ReplicatedStorage/Modules/PosePresets.lua - у каждого
 -- из 4 пресетов свой animationId, поэтому единой GameConfig.POSE_ANIMATION_ID
 -- больше нет (см. DECISIONS.md, п.17).
+-- ЗАГЛУШКА! Замени на реальный звук "щёлк" эффекта затвердевания позы,
+-- когда загрузишь его в Studio (см. DECISIONS.md, п.31, MEGA_PLAN 3.4.2).
+GameConfig.FREEZE_SOUND_ID = "rbxassetid://0"
 
 -- === Свисток (Whistle) - добровольная провокация, см. DECISIONS.md, п.15 и
 -- п.27 (пересмотрено MEGA_PLAN 3.2/Q3 - автосвисток убран, звук смещён от
