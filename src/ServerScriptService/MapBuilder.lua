@@ -22,7 +22,14 @@ local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
 local MapBuilder = {}
 
 local WALL_HEIGHT = 12
-local LOW_DIVIDER_HEIGHT = 4 -- разделяет зоны визуально, но не блокирует line-of-sight/поимку
+-- Разделяет зоны визуально. Не блокирует обзор на СТОЯЧИХ игроков (луч идёт
+-- от головы Seeker'а, ~4.3 стада, к HumanoidRootPart Hider'а) - но для
+-- лежащего Hider'а (HipHeight×0.2, корень ~0.6 стада) перегородка высотой 4
+-- МОЖЕТ перекрыть луч на части дистанций. Это осознанный геймплейный бонус:
+-- лечь за перегородкой - реальное укрытие (см. DECISIONS.md, п.23; найдено
+-- и переформулировано аудитом Fable 5, S7 - раньше комментарий обещал
+-- обратное).
+local LOW_DIVIDER_HEIGHT = 4
 
 local function newPart(props)
 	local p = Instance.new("Part")
@@ -112,9 +119,9 @@ local function buildWorkArea(parent)
 	addFloor(parent, 3.5, 0, 44, 80, floorColor)
 
 	-- Низкая перегородка между "Офисом" (Z<0) и "Складом" (Z>0) - разделяет
-	-- зону визуально, но специально НЕ на полную высоту: не блокирует
-	-- catch/Missed Point Ranking raycast (см. LineOfSightUtil.lua), только
-	-- даёт лёгкое укрытие и ориентир на карте.
+	-- зону визуально, но специально НЕ на полную высоту: для стоящего игрока
+	-- обзор/поимку не блокирует, для лежащего даёт частичное укрытие (см.
+	-- комментарий у LOW_DIVIDER_HEIGHT выше).
 	addWall(parent, 3, 0, 43, 0.6, LOW_DIVIDER_HEIGHT, Color3.fromRGB(150, 150, 155), Enum.Material.Metal)
 
 	-- === Офис (Z от -40 до 0) ===
@@ -155,7 +162,8 @@ local function buildLounge(parent)
 	addFloor(parent, 55, 0, 60, 80, floorColor)
 
 	-- Низкая перегородка между "Гостиной" (Z<0) и "Переговорной" (Z>0) -
-	-- та же логика, что и в рабочей зоне (не блокирует raycast поимки).
+	-- та же логика, что и в рабочей зоне (см. комментарий у
+	-- LOW_DIVIDER_HEIGHT выше).
 	addWall(parent, 55, 0, 60, 0.6, LOW_DIVIDER_HEIGHT, Color3.fromRGB(150, 150, 155), Enum.Material.Metal)
 
 	-- === Гостиная (Z от -40 до 0) ===
