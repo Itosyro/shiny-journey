@@ -112,6 +112,13 @@ local function buildEntranceHall(parent)
 	-- всех, RoundManager сам выбирает случайный на игрока.
 	newPart({ Name = "HiderSpawn", Parent = parent, Size = Vector3.new(4, 1, 4), CFrame = CFrame.new(-30, 0.5, -25), Transparency = 1, CanCollide = false })
 	newPart({ Name = "HiderSpawn", Parent = parent, Size = Vector3.new(4, 1, 4), CFrame = CFrame.new(-30, 0.5, 25), Transparency = 1, CanCollide = false })
+
+	-- Точки материализации Seekers при переходе Hiding→Seeking (эффект
+	-- растворения на платформе + появление здесь, см. RoundManager.
+	-- teleportWithEffect, MEGA_PLAN.md 1.6.2).
+	newPart({ Name = "SeekerSpawn", Parent = parent, Size = Vector3.new(4, 1, 4), CFrame = CFrame.new(-40, 0.5, 0), Transparency = 1, CanCollide = false })
+	newPart({ Name = "SeekerSpawn", Parent = parent, Size = Vector3.new(4, 1, 4), CFrame = CFrame.new(-55, 0.5, -30), Transparency = 1, CanCollide = false })
+	newPart({ Name = "SeekerSpawn", Parent = parent, Size = Vector3.new(4, 1, 4), CFrame = CFrame.new(-55, 0.5, 30), Transparency = 1, CanCollide = false })
 end
 
 local function buildWorkArea(parent)

@@ -5,6 +5,8 @@
 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
+local TweenService = game:GetService("TweenService")
+local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
@@ -95,6 +97,70 @@ local function findSpawnByName(name)
 	return mapFolder and mapFolder:FindFirstChild(name)
 end
 
+-- Эффект телепортации Seekers с лобби-платформы на карту при переходе
+-- Hiding→Seeking - частицы + твин прозрачности + одновременный телепорт
+-- всех разом (см. MEGA_PLAN.md 1.6). Локальная функция, а не новый
+-- модуль - один потребитель (ponytail). ТОЛЬКО для этого перехода:
+-- телепорт Hiders в начале Hiding - мгновенный, без эффекта (их больше,
+-- и это дешевле).
+local function teleportWithEffect(playersList, targetParts)
+	if #targetParts == 0 then
+		return
+	end
+
+	local emitters = {}
+
+	-- Шаги 1-2 (искры + твин "исчезновения") - один проход по ВСЕМ Seekers
+	-- одновременно, без task.wait между игроками - иначе они пропадали бы
+	-- по очереди, а не разом.
+	for _, player in ipairs(playersList) do
+		local character = player.Character
+		local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+		if rootPart then
+			local emitter = Instance.new("ParticleEmitter")
+			emitter.Rate = 0 -- частицы только вручную через Emit(), не поток
+			emitter.Lifetime = NumberRange.new(0.4, 0.7)
+			emitter.Speed = NumberRange.new(3, 6)
+			emitter.Color = ColorSequence.new(Color3.fromRGB(255, 255, 255))
+			-- Texture НЕ задаём - у ParticleEmitter есть встроенная искра,
+			-- своя заглушка-ассет тут не нужна.
+			emitter.Parent = rootPart
+			emitter:Emit(25)
+			emitters[player] = emitter
+
+			-- HumanoidRootPart не трогаем - он и так всегда Transparency=1.
+			for _, part in ipairs(character:GetDescendants()) do
+				if part:IsA("BasePart") and part ~= rootPart then
+					TweenService:Create(part, TweenInfo.new(GameConfig.TELEPORT_EFFECT_SECONDS), { Transparency = 1 }):Play()
+				end
+			end
+		end
+	end
+
+	task.wait(GameConfig.TELEPORT_EFFECT_SECONDS)
+
+	teleportPlayersToRandomOf(playersList, targetParts)
+
+	-- Шаги 5 (обратный твин + вторая вспышка) - снова одним проходом по всем.
+	for _, player in ipairs(playersList) do
+		local character = player.Character
+		local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+		if rootPart then
+			local emitter = emitters[player]
+			if emitter then
+				emitter:Emit(25)
+				Debris:AddItem(emitter, 2)
+			end
+
+			for _, part in ipairs(character:GetDescendants()) do
+				if part:IsA("BasePart") and part ~= rootPart then
+					TweenService:Create(part, TweenInfo.new(GameConfig.TELEPORT_EFFECT_SECONDS), { Transparency = 0 }):Play()
+				end
+			end
+		end
+	end
+end
+
 -- Собирает ВСЕ части с именем name внутри Workspace.Map (не GetDescendants -
 -- вся геометрия карты лежит плоско прямо в папке Map, см. MapBuilder.lua).
 local function findAllSpawnsByName(name)
@@ -159,8 +225,11 @@ local function runHidingPhase()
 end
 
 local function runSeekingPhase()
-	-- Искателей больше не нужно "освобождать" - в Hiding их WalkSpeed уже
-	-- не отнимался (см. runHidingPhase, MEGA_PLAN.md 1.5).
+	-- Seekers растворяются на платформе и материализуются у входа в
+	-- здание - частицы + твин прозрачности, все одновременно (см.
+	-- MEGA_PLAN.md 1.6). WalkSpeed отдельно восстанавливать не нужно - в
+	-- Hiding он не отнимался (см. runHidingPhase, MEGA_PLAN.md 1.5).
+	teleportWithEffect(currentSeekers, findAllSpawnsByName("SeekerSpawn"))
 
 	-- Прячущиеся больше не могут красить - маскировка "заморожена" на время поиска
 	for _, hider in ipairs(currentHiders) do

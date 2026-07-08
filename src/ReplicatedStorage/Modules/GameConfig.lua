@@ -43,6 +43,12 @@ GameConfig.HIDING_PHASE_DURATION = 30    -- время на покраску и 
 GameConfig.SEEKING_PHASE_DURATION = 120  -- время на поиск
 GameConfig.ROUND_END_DISPLAY_DURATION = 12 -- сколько показываем экран результатов
 
+-- Длительность одного твина прозрачности при телепортации Seekers с
+-- лобби-платформы на карту (MEGA_PLAN.md 1.6) - используется дважды
+-- (исчезновение + появление), итоговый эффект длится ~2×это + пауза
+-- на сам телепорт.
+GameConfig.TELEPORT_EFFECT_SECONDS = 0.5
+
 -- === Покраска (кисть, см. DECISIONS.md, п.14) ===
 GameConfig.EYEDROPPER_MAX_DISTANCE = 60  -- максимальная дальность пипетки (в стадах)
 
