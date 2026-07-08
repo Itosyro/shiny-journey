@@ -114,6 +114,14 @@ buildLobbyPlatform` (заменила `buildSeekerWaitingRoom`) - остальн
   `FreezeService.ForceUnfreeze` всем сразу после `AssignRoles`, чтобы
   никто не вошёл в раунд замороженным с лобби. Гейтинг клиентских панелей
   (`PaintClient`/`FreezeClient`) зеркалит серверную проверку.
+- **Ожидание Seekers на платформе (готово)** - `RoundManager.
+  runHidingPhase` телепортирует Seekers на `SeekerWaitingRoom`
+  (на платформе), но БОЛЬШЕ не отнимает `WalkSpeed`: платформа со всех
+  сторон окружена стенами (`buildLobbyPlatform`), сбежать некуда, а
+  красить в `Hiding` им всё равно запрещает `RoleUtil.IsHider` в
+  `PaintService`. Парный `setWalkable(seeker, true)` в `runSeekingPhase`
+  убран как ставший ненужным. Роль-текст Seeker на HUD в фазе `Hiding`
+  изменён на "Ты Искатель - жди на платформе!".
 - **Персистентность покраски (проверка, не правка)** - БЕЗ новых структур:
   мазки живут на частях персонажа. Hider на старте пряток проходит через
   существующий `ResetForNewRound` (стирается), Seeker не проходит
@@ -236,10 +244,13 @@ RemoteFunctions в проекте **не используются** (всё по
      • ExitSpectator для всех - те, кто зашёл посреди  │
        прошлого раунда и всё ещё летает зрителем,      │
        респавнятся и получают роль (DECISIONS 21)      │
+     • ForceUnfreeze для всех - никто не входит в раунд│
+       замороженным с лобби-платформы (MEGA_PLAN 1.3.2)│
         │                                             │
         ▼                                             │
   [ Hiding ]  HIDING_PHASE_DURATION сек               │
-     • Seekers → SeekerWaitingRoom (на лобби-платформе), WalkSpeed=0│
+     • Seekers → SeekerWaitingRoom (на лобби-платформе), ходят свободно│
+       (WalkSpeed не отнимается - стены платформы не дают сбежать)  │
      • Hiders → случайный HiderSpawn на карте здания   │
        (teleportPlayersToRandomOf, MEGA_PLAN 1.1.7)    │
      • Hiders: чернила и мазки прошлого раунда стёрты  │

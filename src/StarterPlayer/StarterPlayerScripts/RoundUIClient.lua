@@ -50,7 +50,7 @@ function RoundUIClient.Init(remotesFolder)
 	-- продолжал бы показывать устаревшую роль "Ты Прячущийся" до конца раунда.
 	local function updateRoleText()
 		if currentPhase == "Hiding" then
-			hud.SetRoleText(isLocalPlayerSeeker() and "Ты Искатель (жди в комнате)" or "Ты Прячущийся - красься!")
+			hud.SetRoleText(isLocalPlayerSeeker() and "Ты Искатель - жди на платформе!" or "Ты Прячущийся - красься!")
 		elseif currentPhase == "Seeking" then
 			hud.SetRoleText(isLocalPlayerSeeker() and "Ты Искатель - ищи всех!" or "Ты Прячущийся - замри!")
 		end

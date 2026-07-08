@@ -137,11 +137,12 @@ local function runHidingPhase()
 		end
 	end
 
-	-- Искателей запираем в комнате ожидания на время пряток
+	-- Искателей телепортируем на лобби-платформу - там они свободно ходят,
+	-- тренируют кисть/позы и ждут (WalkSpeed НЕ отнимаем: сбежать некуда,
+	-- платформу окружают стены из MapBuilder.buildLobbyPlatform, а красить
+	-- в Hiding им всё равно запрещает RoleUtil.IsHider в PaintService -
+	-- см. MEGA_PLAN.md 1.5).
 	teleportPlayersTo(currentSeekers, findSpawnByName("SeekerWaitingRoom"))
-	for _, seeker in ipairs(currentSeekers) do
-		setWalkable(seeker, false)
-	end
 
 	-- Прячущихся спускаем с лобби-платформы на карту здания - каждому
 	-- случайный маркер HiderSpawn (см. MapBuilder.lua, MEGA_PLAN.md 1.1.7).
@@ -158,10 +159,8 @@ local function runHidingPhase()
 end
 
 local function runSeekingPhase()
-	-- Освобождаем искателей
-	for _, seeker in ipairs(currentSeekers) do
-		setWalkable(seeker, true)
-	end
+	-- Искателей больше не нужно "освобождать" - в Hiding их WalkSpeed уже
+	-- не отнимался (см. runHidingPhase, MEGA_PLAN.md 1.5).
 
 	-- Прячущиеся больше не могут красить - маскировка "заморожена" на время поиска
 	for _, hider in ipairs(currentHiders) do
