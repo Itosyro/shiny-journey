@@ -107,14 +107,23 @@ GameConfig.PAINTABLE_PART_NAMES = {
 -- из 4 пресетов свой animationId, поэтому единой GameConfig.POSE_ANIMATION_ID
 -- больше нет (см. DECISIONS.md, п.17).
 
--- === Свисток (Whistle) - см. DECISIONS.md, п.15 ===
-GameConfig.WHISTLE_AUTO_INTERVAL_SECONDS = 45 -- через сколько секунд молчания срабатывает автосвисток
-GameConfig.WHISTLE_MANUAL_COOLDOWN_SECONDS = 3 -- антиспам ручного свистка (см. AUDIT_FABLE5.md, S1)
+-- === Свисток (Whistle) - добровольная провокация, см. DECISIONS.md, п.15 и
+-- п.27 (пересмотрено MEGA_PLAN 3.2/Q3 - автосвисток убран, звук смещён от
+-- реальной позиции игрока, есть очки за смелость) ===
+GameConfig.WHISTLE_COOLDOWN_SECONDS = 15 -- как часто МОЖНО свистнуть добровольно
 -- ЗАГЛУШКА! Замени на реальный звук свистка, когда загрузишь его в Studio.
 GameConfig.WHISTLE_SOUND_ID = "rbxassetid://0"
 GameConfig.WHISTLE_VOLUME = 1
 GameConfig.WHISTLE_ROLLOFF_MIN_DISTANCE = 5   -- ближе этого расстояния звук на полной громкости
 GameConfig.WHISTLE_ROLLOFF_MAX_DISTANCE = 60  -- дальше этого расстояния звук не слышен
+-- Звук намеренно НЕ выдаёт точную позицию (см. оригинал) - источник звука
+-- смещается в случайную сторону от игрока на это расстояние.
+GameConfig.WHISTLE_SOUND_OFFSET_MIN = 8
+GameConfig.WHISTLE_SOUND_OFFSET_MAX = 14
+-- Очки за смелость - начисляются, если хоть один Seeker в этом радиусе
+-- (т.е. свистнул рискованно, реально приманив кого-то, а не в пустоту).
+GameConfig.WHISTLE_BRAVERY_RADIUS = 40
+GameConfig.WHISTLE_BRAVERY_POINTS = 5
 
 -- === Внешность персонажа (см. DECISIONS.md, п.26, MEGA_PLAN.md Часть 2) ===
 -- Чуть тёплый белый - чистый 255 сливается с бликами SmoothPlastic.

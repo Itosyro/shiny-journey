@@ -103,6 +103,15 @@ function ScoreService.OnHiderSurvived(player)
 	roundScores[player] = (roundScores[player] or 0) + GameConfig.SURVIVAL_BONUS_POINTS
 end
 
+-- Универсальная точечная прибавка/штраф очков за раунд - используется там,
+-- где начисление не привязано к "поймали"/"дожил" (например, очки за
+-- смелость при добровольном свистке, см. WhistleService.lua,
+-- DECISIONS.md, п.27). Клэмп снизу нулём - штраф не может увести очки в
+-- минус.
+function ScoreService.AddRoundPoints(player, delta)
+	roundScores[player] = math.max(0, (roundScores[player] or 0) + delta)
+end
+
 -- === Missed Point Ranking (см. DECISIONS.md, п.22) ===
 
 local function sendMissedPointUpdate(player, total)

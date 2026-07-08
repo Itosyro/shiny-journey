@@ -1,23 +1,20 @@
 -- WhistleClient.lua
--- Кнопка "Свистнуть" + индикатор обратного отсчёта до автоматического свистка.
--- Видна только Hiders, и только в фазу поиска (Seeking) - см. WhistleService.lua
--- и DECISIONS.md, п.15. Новый файл - механика свистка появилась по прямому
--- запросу автора после аудита Opus.
+-- Кнопка "Свистнуть" (добровольно, игрок сам решает рискнуть) + полоска
+-- перезарядки после использования. Видна только Hiders, и только в фазу
+-- поиска (Seeking) - см. WhistleService.lua и DECISIONS.md, п.15/27
+-- (пересмотрено MEGA_PLAN 3.2/Q3 - автосвисток убран).
 
 local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
+local RoleUtil = require(ReplicatedStorage.Modules.RoleUtil)
 
 local player = Players.LocalPlayer
 
 local WhistleClient = {}
 
 local currentPhase = "Lobby"
-
-local function isHider()
-	return player.Team ~= nil and player.Team.Name == GameConfig.TEAM_HIDERS_NAME
-end
 
 function WhistleClient.Init(remotesFolder)
 	local requestWhistleRemote = remotesFolder:WaitForChild("RequestWhistle")
@@ -57,10 +54,11 @@ function WhistleClient.Init(remotesFolder)
 	countdownLabel.Font = Enum.Font.Gotham
 	countdownLabel.TextScaled = true
 	countdownLabel.TextColor3 = Color3.fromRGB(255, 220, 0)
-	countdownLabel.Text = "До свистка: --"
+	countdownLabel.Text = "Свистнуть"
 	countdownLabel.Parent = root
 
-	-- Полоска обратного отсчёта - "тает" по мере приближения принудительного свистка
+	-- Полоска перезарядки - "наполняется" от 0 до полной за WHISTLE_COOLDOWN_SECONDS
+	-- после каждого использования.
 	local barTrack = Instance.new("Frame")
 	barTrack.Name = "CountdownBarTrack"
 	barTrack.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
@@ -103,13 +101,20 @@ function WhistleClient.Init(remotesFolder)
 	end)
 
 	local function updateVisibility()
-		root.Visible = isHider() and currentPhase == "Seeking"
+		root.Visible = RoleUtil.IsHider(player) and currentPhase == "Seeking"
 	end
 
-	countdownRemote.OnClientEvent:Connect(function(secondsLeft)
-		countdownLabel.Text = string.format("До свистка: %d", secondsLeft)
-		local fraction = math.clamp(secondsLeft / GameConfig.WHISTLE_AUTO_INTERVAL_SECONDS, 0, 1)
-		barFill.Size = UDim2.new(fraction, 0, 1, 0)
+	-- Сервер шлёт это событие только в момент самого свистка (кулдаун
+	-- полный, т.к. до этого свистнуть было нельзя) - полоска "наполняется"
+	-- одним твином без per-frame тик-дауна на клиенте.
+	countdownRemote.OnClientEvent:Connect(function(cooldownSeconds)
+		countdownLabel.Text = "Перезарядка..."
+		barFill.Size = UDim2.new(0, 0, 1, 0)
+		local tween = TweenService:Create(barFill, TweenInfo.new(cooldownSeconds), { Size = UDim2.new(1, 0, 1, 0) })
+		tween.Completed:Once(function()
+			countdownLabel.Text = "Свистнуть"
+		end)
+		tween:Play()
 	end)
 
 	roundStateRemote.OnClientEvent:Connect(function(state)

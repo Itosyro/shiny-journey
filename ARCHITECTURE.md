@@ -29,7 +29,7 @@ Main.client ─ инициализирует:              Main.server ─ ин�
                 ◄─PlayerCaught────────       CatchService (ProximityPrompt + серверные
   CatchClient   ◄─HideCatchPromptsFromHiders  дистанция/line-of-sight проверки; OnCatch-хук
   PaintClient   ◄─InkUpdate─────────────      для перехода роли в Infection, см. DECISIONS 18)
-  WhistleClient ──RequestWhistle────────►    WhistleService (Sound + RollOff, см. DECISIONS 15)
+  WhistleClient ──RequestWhistle────────►    WhistleService (Sound со смещением + RollOff, см. DECISIONS 27)
   WhistleClient ◄─WhistleCountdownUpdate      ScoreService ──require──► CatchService, LineOfSightUtil
   RoundUIClient ◄─MissedPointRankingUpdate    (Missed Point Ranking, только самому Hider'у, см. DECISIONS 22)
   LobbyUIClient ◄─RoundStateChanged─────     PrivateRoomService (TeleportService +
@@ -187,8 +187,8 @@ buildLobbyPlatform` (заменила `buildSeekerWaitingRoom`) - остальн
 | `PlayerCaught` | сервер → все клиенты | `hiderName: string`, `seekerName: string`, `remaining: number` | Кого-то поймали + сколько осталось. |
 | `InkUpdate` | сервер → **один** клиент | `amount: number`, `maxAmount: number` | Обновление количества "чернил" кисти конкретного игрока (замена прежних дискретных "зарядов", см. `DECISIONS.md`, п.14). Отправляется только в фазах `Hiding`/`Lobby` (см. `AUDIT_FABLE5.md`, S9). |
 | `HideCatchPromptsFromHiders` | сервер → **только Hiders**, персонально каждому | `prompts: {ProximityPrompt}` | Список всех активных промптов поимки за раунд; клиент локально ставит им `Enabled = false`, чтобы Hiders не видели, где стоят другие Hiders (см. `DECISIONS.md`, п.12). Seekers это событие не получают. |
-| `RequestWhistle` | клиент → сервер | (без параметров) | Hider просит свистнуть прямо сейчас. Сервер проверяет роль/фазу/не пойман ли, сбрасывает таймер и проигрывает звук, см. `DECISIONS.md`, п.15. |
-| `WhistleCountdownUpdate` | сервер → **только Hiders**, персонально каждому | `secondsLeft: number` | Сколько секунд осталось до следующего (авто- или уже сброшенного) свистка. |
+| `RequestWhistle` | клиент → сервер | (без параметров) | Hider добровольно просит свистнуть прямо сейчас. Сервер проверяет роль/фазу (только `Seeking`)/не пойман ли/кулдаун, проигрывает звук из точки, смещённой от игрока, и начисляет очки за смелость, если рядом Seeker - см. `DECISIONS.md`, п.27. |
+| `WhistleCountdownUpdate` | сервер → **только свистнувшему**, персонально | `cooldownSeconds: number` | Отправляется в момент свистка - длительность перезарядки (`GameConfig.WHISTLE_COOLDOWN_SECONDS`), клиент анимирует полоску одним твином. |
 | `CreatePrivateRoom` | клиент → сервер | `password: string` | Создать приватную комнату с этим паролем. Сервер валидирует длину, резервирует сервер (`TeleportService:ReserveServerAsync`), сохраняет пару пароль→код в `MemoryStoreService` и телепортирует создателя, см. `DECISIONS.md`, п.20. |
 | `JoinPrivateRoom` | клиент → сервер | `password: string` | Войти в комнату по паролю. Сервер ищет код по паролю в `MemoryStoreService` и телепортирует, см. `DECISIONS.md`, п.20. |
 | `PrivateRoomError` | сервер → **один** клиент | `message: string` | Не удалось создать/войти (текст причины на русском для показа в UI). |
@@ -231,8 +231,7 @@ RemoteFunctions в проекте **не используются** (всё по
 | `ScoreService` | `roundScores[player] = number` | очки за текущий раунд |
 | `ScoreService` | `roundStartTimes[player] = tick()` | когда для Hider началась фаза поиска |
 | `ScoreService` | `missedPointScores[player] = number` | очки Missed Point Ranking за текущий раунд (см. `DECISIONS.md`, п.22) |
-| `WhistleService` | `nextWhistleAt[player] = tick()` | когда сработает следующий свисток этого Hider |
-| `WhistleService` | `whistleSounds[player] = Sound` | переиспользуемый звук свистка (создаётся один раз) |
+| `WhistleService` | `lastWhistleAt[player] = tick()` | когда этот Hider свистел в последний раз (кулдаун, см. `DECISIONS.md`, п.27) |
 | `RoundManager` | `currentHiders`, `currentSeekers` | списки игроков по ролям в текущем раунде |
 | `PlayerRoleService` | Teams | роль игрока хранится штатно в `player.Team` |
 | `PrivateRoomService` | `joinAttempts[player] = {count, windowStart}` | рейт-лимит попыток создать/войти в приватную комнату |
@@ -277,8 +276,9 @@ RemoteFunctions в проекте **не используются** (всё по
      • Hiders: рисование запрещено, поза не переключается│
      • на Hiders повешены ProximityPrompt (видны только │
        Seekers, требуют line-of-sight - см. DECISIONS 12)│
-     • у каждого Hider тикает таймер свистка - авто через │
-       WHISTLE_AUTO_INTERVAL_SECONDS или вручную (DECISIONS 15)│
+     • Hider может добровольно свистнуть (раз в            │
+       WHISTLE_COOLDOWN_SECONDS) - звук со смещением от    │
+       позиции + очки за смелость, если рядом Seeker (DECISIONS 27)│
      • раз в MISSED_POINT_CHECK_INTERVAL_SECONDS каждый   │
        живой Hider проверяется на видимость Seekers -     │
        Missed Point Ranking очки, только самому Hider'у   │
