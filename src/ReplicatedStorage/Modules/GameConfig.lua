@@ -31,6 +31,13 @@ GameConfig.SEEKERS_PER_PLAYERS_INFECTION = 8 -- Infection: старт меньш
 GameConfig.MIN_SEEKERS = 1
 GameConfig.MAX_SEEKERS = 5
 
+-- Горизонтальный радиус (стады, без учёта высоты) вокруг центра лобби-
+-- платформы, засчитываемый как "встал в зону добровольного Seeker"
+-- (см. PlayerRoleService.getRoleIntent, MEGA_PLAN.md 1.2). Чуть больше
+-- видимого диска-подсветки (радиус 6, MapBuilder.buildLobbyPlatform) -
+-- не заставляет игрока попадать точно в габарит диска.
+GameConfig.LOBBY_SEEKER_ZONE_RADIUS = 7
+
 -- === Тайминги фаз раунда (в секундах) ===
 GameConfig.HIDING_PHASE_DURATION = 30    -- время на покраску и прятки, искатели ждут в комнате
 GameConfig.SEEKING_PHASE_DURATION = 120  -- время на поиск

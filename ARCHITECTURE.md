@@ -99,11 +99,13 @@ buildLobbyPlatform` (заменила `buildSeekerWaitingRoom`) - остальн
   туда Hiders случайно (`teleportPlayersToRandomOf`). Попутно исправлен
   баг `findSpawnByName` (искал в `Workspace`, а не в `Workspace.Map` -
   см. `DECISIONS.md`, п.25).
-- **Выбор роли (ещё не реализовано)** - в `PlayerRoleService.AssignRoles`:
-  новая `getRoleIntent(player)` читает позицию игрока ОДИН раз в момент
+- **Выбор роли (готово)** - в `PlayerRoleService.AssignRoles`: новая
+  `getRoleIntent(player)` читает позицию игрока ОДИН раз в момент
   раздачи (не следит циклом — правило производительности №1) и относит
-  его к пулу volunteers/hiderWish/randomPool; слоты Seeker заполняются по
-  приоритету. Сигнатура `AssignRoles` не меняется.
+  его к пулу volunteers/hiderWish/randomPool (по `SeekerVolunteerZone`/
+  `HiderGateZone`); слоты Seeker заполняются по приоритету
+  (добровольцы → случайные → желающие прятаться). Сигнатура
+  `AssignRoles` не изменилась.
 - **Разрешения фаз (ещё не реализовано)** - `PaintService`/`FreezeService`
   расширяют проверку фазы на `Lobby` (тренировка кисти/поз в лобби) и
   позже на `Seeking` (докраска, MEGA_PLAN 3.2/Q2). Гейтинг клиентских

@@ -2,6 +2,7 @@
 -- Отвечает за команды (Teams) и распределение ролей Hiders/Seekers перед раундом.
 
 local Teams = game:GetService("Teams")
+local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
@@ -60,20 +61,93 @@ local function shuffle(array)
 	return result
 end
 
--- Основная функция: получает список игроков, случайно распределяет роли,
--- возвращает два списка - hiders и seekers, и сразу назначает им команды.
+-- Читает позицию игрока на лобби-платформе ОДИН раз в момент раздачи
+-- ролей (не следит циклом за зонами - правило мобильной оптимизации №1,
+-- CLAUDE.md) и определяет его "заявку" на роль: встал в центр
+-- (SeekerVolunteerZone) - хочет быть Seeker; встал под одной из 4 арок
+-- (HiderGateZone) - хочет быть Hider; иначе - как выпадет (см.
+-- MapBuilder.buildLobbyPlatform, MEGA_PLAN.md 1.2).
+local function getRoleIntent(player)
+	local character = player.Character
+	local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+	if not rootPart then
+		return "Random"
+	end
+
+	local mapFolder = Workspace:FindFirstChild("Map")
+	if not mapFolder then
+		return "Random"
+	end
+
+	local pos = rootPart.Position
+
+	local seekerZone = mapFolder:FindFirstChild("SeekerVolunteerZone")
+	if seekerZone then
+		local flatOffset = Vector3.new(pos.X - seekerZone.Position.X, 0, pos.Z - seekerZone.Position.Z)
+		if flatOffset.Magnitude <= GameConfig.LOBBY_SEEKER_ZONE_RADIUS then
+			return "Seeker"
+		end
+	end
+
+	-- 4 арки-врат Hider используют одно и то же имя - проверяем каждую
+	-- (попадание в прямоугольный объём, высота не важна).
+	for _, child in ipairs(mapFolder:GetChildren()) do
+		if child.Name == "HiderGateZone" then
+			local dx = math.abs(pos.X - child.Position.X)
+			local dz = math.abs(pos.Z - child.Position.Z)
+			if dx <= child.Size.X / 2 and dz <= child.Size.Z / 2 then
+				return "Hider"
+			end
+		end
+	end
+
+	return "Random"
+end
+
+-- Основная функция: получает список игроков, распределяет роли с учётом
+-- их заявки (позиция на лобби-платформе, см. getRoleIntent выше) и сразу
+-- назначает им команды. Сигнатура не изменилась - вызывающий код
+-- (RoundManager) не правится.
 function PlayerRoleService.AssignRoles(players)
-	local shuffled = shuffle(players)
-	local seekersCount = calculateSeekersCount(#shuffled)
+	local seekersCount = calculateSeekersCount(#players)
 
-	local seekers = {}
-	local hiders = {}
-
-	for i, player in ipairs(shuffled) do
-		if i <= seekersCount then
-			table.insert(seekers, player)
-			player.Team = seekersTeam
+	-- Три пула по заявке на роль.
+	local volunteers, hiderWish, randomPool = {}, {}, {}
+	for _, player in ipairs(players) do
+		local intent = getRoleIntent(player)
+		if intent == "Seeker" then
+			table.insert(volunteers, player)
+		elseif intent == "Hider" then
+			table.insert(hiderWish, player)
 		else
+			table.insert(randomPool, player)
+		end
+	end
+
+	-- Заполняем слоты Seeker по приоритету: сначала добровольцы, потом
+	-- случайный пул, и только если совсем не хватило (например, все
+	-- встали во врата Hider) - из желающих прятаться. "Лишние" добровольцы
+	-- (больше желающих, чем слотов) отправляются в Hiders - центр
+	-- гарантирует роль только пока есть слоты, а не обещание.
+	local seekers = {}
+	for _, pool in ipairs({ shuffle(volunteers), shuffle(randomPool), shuffle(hiderWish) }) do
+		for _, player in ipairs(pool) do
+			if #seekers >= seekersCount then
+				break
+			end
+			table.insert(seekers, player)
+		end
+	end
+
+	local seekerSet = {}
+	for _, player in ipairs(seekers) do
+		seekerSet[player] = true
+		player.Team = seekersTeam
+	end
+
+	local hiders = {}
+	for _, player in ipairs(players) do
+		if not seekerSet[player] then
 			table.insert(hiders, player)
 			player.Team = hidersTeam
 		end
