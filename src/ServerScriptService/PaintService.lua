@@ -12,11 +12,11 @@
 -- (см. DECISIONS.md, п.2 - тот же принцип, что и раньше для Color3).
 
 local Players = game:GetService("Players")
-local Teams = game:GetService("Teams")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
 local BrushGeometry = require(ReplicatedStorage.Modules.BrushGeometry)
+local RoleUtil = require(ReplicatedStorage.Modules.RoleUtil)
 -- Только для проверки текущей фазы раунда (RoundManager.State), см. FreezeService.lua
 -- - там же комментарий, почему это не создаёт цикл require.
 local RoundManager = require(script.Parent.RoundManager)
@@ -49,11 +49,6 @@ local remotesRef
 
 local function clamp01(n)
 	return math.clamp(n, 0, 1)
-end
-
-local function isHider(player)
-	local hidersTeam = Teams:FindFirstChild(GameConfig.TEAM_HIDERS_NAME)
-	return hidersTeam ~= nil and player.Team == hidersTeam
 end
 
 local function sendInkUpdate(player)
@@ -157,7 +152,7 @@ local function onPaintStroke(player, points, brushColor, brushSize)
 		return
 	end
 
-	if not isHider(player) then
+	if not RoleUtil.IsHider(player) then
 		return -- красить может только Hider
 	end
 

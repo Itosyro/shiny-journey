@@ -6,11 +6,11 @@
 -- (см. PaintService.SetPaintingAllowed и DECISIONS.md, п.5, п.10, п.17).
 
 local Players = game:GetService("Players")
-local Teams = game:GetService("Teams")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
 local PosePresets = require(ReplicatedStorage.Modules.PosePresets)
+local RoleUtil = require(ReplicatedStorage.Modules.RoleUtil)
 -- Требуется только для проверки текущей фазы раунда (RoundManager.State).
 -- Обратной зависимости нет - RoundManager получает сервисы через Init(), а не
 -- через require(), так что цикла require здесь не образуется.
@@ -139,17 +139,12 @@ end
 -- Hider на ходу переключать позу во время поиска (подстроиться под шаги Seeker
 -- или внезапно встать/сняться с позы, чтобы сбить с толку) - решение зафиксировано
 -- в DECISIONS.md, п.13, включая обсуждение компромисса.
-local function isHider(player)
-	local hidersTeam = Teams:FindFirstChild(GameConfig.TEAM_HIDERS_NAME)
-	return hidersTeam ~= nil and player.Team == hidersTeam
-end
-
 local function onRequestFreeze(player, wantsFreeze, poseId)
 	if typeof(wantsFreeze) ~= "boolean" then
 		return
 	end
 
-	if not isHider(player) then
+	if not RoleUtil.IsHider(player) then
 		return -- Seekers не могут вставать в позу
 	end
 

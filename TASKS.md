@@ -80,10 +80,10 @@ Claude Fable 5 (все 33 .lua-файла построчно). Полный от
   `GameConfig.WHISTLE_MANUAL_COOLDOWN_SECONDS` (3с); чистится в
   существующем PlayerRemoving. ✅ Исправлено.
   ✔ Спам-клики не проигрывают звук чаще раза в 3 секунды.
-- [ ] **(S2)** Убрать три серверные копии `isHider()`. `PaintService.lua`,
-  `FreezeService.lua`, `WhistleService.lua`: заменить локальные функции
-  на `RoleUtil.IsHider(player)` (модуль уже существует и работает на
-  сервере).
+- [x] **(S2)** Убрать три серверные копии `isHider()`. `PaintService.lua`,
+  `FreezeService.lua`, `WhistleService.lua`: локальные функции заменены
+  на `RoleUtil.IsHider(player)`; заодно убран ставший ненужным
+  `Teams`-сервис в этих трёх файлах. ✅ Исправлено.
   ✔ `grep "local function isHider" src/ServerScriptService` пуст.
 - [ ] **(S3)** Экран итогов строится дважды за RoundEnd. Убрать ОДИН из
   двух путей доставки результатов: рекомендация — удалить

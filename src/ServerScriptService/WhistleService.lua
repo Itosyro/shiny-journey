@@ -7,10 +7,10 @@
 -- в более безопасный момент).
 
 local Players = game:GetService("Players")
-local Teams = game:GetService("Teams")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
+local RoleUtil = require(ReplicatedStorage.Modules.RoleUtil)
 
 local WhistleService = {}
 
@@ -23,11 +23,6 @@ local CatchServiceRef
 -- Увеличивается на каждый StartSeekingPhase/EndRound, чтобы предыдущий фоновый
 -- цикл watchLoop сам понял, что раунд закончился, и не работал поверх нового.
 local roundToken = 0
-
-local function isHider(player)
-	local hidersTeam = Teams:FindFirstChild(GameConfig.TEAM_HIDERS_NAME)
-	return hidersTeam ~= nil and player.Team == hidersTeam
-end
 
 local function sendCountdown(player, secondsLeft)
 	if remotesRef then
@@ -71,7 +66,7 @@ end
 -- Ручной свисток по запросу клиента - сервер сам решает, разрешено ли это
 -- (роль, активна ли фаза поиска, не пойман ли уже), а не доверяет клиенту.
 local function onRequestWhistle(player)
-	if not isHider(player) then
+	if not RoleUtil.IsHider(player) then
 		return
 	end
 
