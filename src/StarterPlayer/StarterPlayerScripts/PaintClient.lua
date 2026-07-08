@@ -45,6 +45,7 @@ local eyedropperActive = false
 local paintModeActive = false
 local isDragging = false
 local strokeBuffer = {}
+local lastStrokeSampleAt = 0 -- троттлинг addStrokePoint, см. ниже (V2 в AUDIT_FABLE5.md)
 
 local paintRemote
 local previousCameraType
@@ -175,6 +176,15 @@ local function addStrokePoint(screenPosition)
 	if #strokeBuffer >= GameConfig.MAX_STROKE_POINTS_PER_BATCH then
 		return
 	end
+
+	-- InputChanged приходит с частотой устройства (до 240 Гц) - без троттлинга
+	-- каждый такой ивент гонял бы raycast, впустую нагружая слабые телефоны.
+	-- ~33 раза в секунду достаточно для плавного мазка (см. правило мобильной
+	-- оптимизации №2 в CLAUDE.md).
+	if time() - lastStrokeSampleAt < 0.03 then
+		return
+	end
+	lastStrokeSampleAt = time()
 
 	local result = raycastOwnCharacter(screenPosition)
 	if not result or not result.Instance or not result.Instance:IsA("BasePart") then
