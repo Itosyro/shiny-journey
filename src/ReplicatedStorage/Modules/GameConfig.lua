@@ -58,7 +58,7 @@ GameConfig.BRUSH_STAMP_IMAGE_ID = "rbxassetid://0"
 -- Защита от накрутки: сколько точек мазка сервер примет за один пакет от клиента,
 -- и сколько мазков может одновременно висеть на одном игроке (старые вытесняются).
 GameConfig.MAX_STROKE_POINTS_PER_BATCH = 24
-GameConfig.MAX_ACTIVE_STAMPS_PER_PLAYER = 400
+GameConfig.MAX_ACTIVE_STAMPS_PER_PLAYER = 150
 
 -- === Обнаружение (поимка) ===
 GameConfig.CATCH_MAX_DISTANCE = 8          -- на каком расстоянии искатель может поймать (в стадах)
