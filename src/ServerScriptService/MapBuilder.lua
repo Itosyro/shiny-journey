@@ -65,12 +65,15 @@ end
 -- Мебель - обычный BasePart с именем, размером и цветом, ничего больше.
 -- Разнообразие цвета/размера - осознанно (нужно для маскировки кистью, см.
 -- CLAUDE.md и DECISIONS.md, п.14).
-local function addFurniture(parent, name, centerX, centerZ, size, color, material)
+-- yOffset (опционально) - для предмета, который должен стоять НЕ на полу,
+-- а поверх другого предмета мебели (например, монитор на столе) - высота
+-- нижнего предмета (см. AUDIT_FABLE5.md, S6).
+local function addFurniture(parent, name, centerX, centerZ, size, color, material, yOffset)
 	newPart({
 		Name = name,
 		Parent = parent,
 		Size = size,
-		CFrame = CFrame.new(centerX, size.Y / 2, centerZ),
+		CFrame = CFrame.new(centerX, size.Y / 2 + (yOffset or 0), centerZ),
 		Color = color,
 		Material = material or Enum.Material.SmoothPlastic,
 	})
@@ -120,11 +123,13 @@ local function buildWorkArea(parent)
 	for i, offsetZ in ipairs({ -30, -18, -6 }) do
 		addFurniture(parent, "Desk", -8, offsetZ, Vector3.new(6, 2.4, 3), deskColor, Enum.Material.Wood)
 		addFurniture(parent, "Chair", -8, offsetZ + 2.5, Vector3.new(2, 3, 2), chairColors[i], Enum.Material.Fabric)
-		addFurniture(parent, "Monitor", -9.5, offsetZ - 0.5, Vector3.new(1.4, 1.2, 0.3), Color3.fromRGB(25, 25, 25), Enum.Material.SmoothPlastic)
+		-- yOffset = высота стола (2.4) - монитор стоит НА столе, а не в полу под ним
+		addFurniture(parent, "Monitor", -9.5, offsetZ - 0.5, Vector3.new(1.4, 1.2, 0.3), Color3.fromRGB(25, 25, 25), Enum.Material.SmoothPlastic, 2.4)
 	end
 	addFurniture(parent, "Shelf", 20, -35, Vector3.new(2, 8, 10), Color3.fromRGB(140, 140, 140), Enum.Material.Wood)
 	addFurniture(parent, "Shelf", 20, -5, Vector3.new(2, 8, 10), Color3.fromRGB(140, 140, 140), Enum.Material.Wood)
-	addFurniture(parent, "OfficePlant", -20, -35, Vector3.new(2, 4, 2), Color3.fromRGB(70, 150, 80), Enum.Material.Grass)
+	-- X=-15 (не -20) - иначе растение попадает в зону Лобби (X < -18), а не Офиса
+	addFurniture(parent, "OfficePlant", -15, -35, Vector3.new(2, 4, 2), Color3.fromRGB(70, 150, 80), Enum.Material.Grass)
 
 	-- === Склад (Z от 0 до 40) - разноцветные/разноразмерные ящики ===
 	local crateColors = {
@@ -159,7 +164,8 @@ local function buildLounge(parent)
 	addFurniture(parent, "CoffeeTable", 40, -17, Vector3.new(5, 1.5, 3), Color3.fromRGB(110, 80, 55), Enum.Material.Wood)
 	for _, pos in ipairs({ { 65, -30 }, { 75, -10 }, { 65, -5 } }) do
 		addFurniture(parent, "PlantPot", pos[1], pos[2], Vector3.new(2, 1.5, 2), Color3.fromRGB(180, 90, 60), Enum.Material.SmoothPlastic)
-		addFurniture(parent, "PlantTop", pos[1], pos[2], Vector3.new(2.4, 3, 2.4), Color3.fromRGB(60, 140, 70), Enum.Material.Grass)
+		-- yOffset = высота горшка (1.5) - крона растёт ИЗ горшка, а не сквозь него
+		addFurniture(parent, "PlantTop", pos[1], pos[2], Vector3.new(2.4, 3, 2.4), Color3.fromRGB(60, 140, 70), Enum.Material.Grass, 1.5)
 	end
 	addFurniture(parent, "FloorLamp", 78, -32, Vector3.new(1.2, 7, 1.2), Color3.fromRGB(230, 200, 80), Enum.Material.Neon)
 
