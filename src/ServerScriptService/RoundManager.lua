@@ -244,9 +244,29 @@ local function gameLoop()
 	end
 end
 
+-- Игрок, вышедший посреди раунда, иначе остаётся призраком в currentHiders/
+-- currentSeekers - попадает на экран итогов и в BuildRoundResults, хотя его
+-- уже нет на сервере. Обратный цикл, чтобы не пропустить элемент при сдвиге
+-- индексов после table.remove (см. AUDIT_FABLE5.md, V3).
+local function removeFromRoleLists(player)
+	for i = #currentHiders, 1, -1 do
+		if currentHiders[i] == player then
+			table.remove(currentHiders, i)
+		end
+	end
+
+	for i = #currentSeekers, 1, -1 do
+		if currentSeekers[i] == player then
+			table.remove(currentSeekers, i)
+		end
+	end
+end
+
 function RoundManager.Init(remotes, injectedServices)
 	remotesRef = remotes
 	services = injectedServices
+
+	Players.PlayerRemoving:Connect(removeFromRoleLists)
 end
 
 function RoundManager.Start()
