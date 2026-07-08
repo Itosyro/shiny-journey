@@ -19,7 +19,8 @@ local REMOTE_EVENT_NAMES = {
 	-- отдельного RemoteEvent для этого не заводим (было "RoundResults",
 	-- убрано как дублирующий путь доставки, см. AUDIT_FABLE5.md, S3).
 	"InkUpdate",          -- сервер -> клиент: обновление количества "чернил" кисти
-	"HideCatchPromptsFromHiders", -- сервер -> клиент (только Hiders): локально скрыть подсказки "Поймать"
+	"HideCatchPromptsFromHiders", -- сервер -> клиент (только Hiders): локально скрыть подсказки "Поймать" (режим Proximity)
+	"RequestTag",         -- клиент -> сервер (только Seekers): unit-вектор направления камеры - метка с дистанции (см. DECISIONS.md, п.29)
 	"RequestWhistle",         -- клиент -> сервер: свистнуть добровольно прямо сейчас (см. DECISIONS.md, п.27)
 	"WhistleCountdownUpdate", -- сервер -> клиент (только свистнувшему): длительность перезарядки (см. п.27)
 	"CreatePrivateRoom",  -- клиент -> сервер: создать приватную комнату с паролем (см. DECISIONS.md, п.20)

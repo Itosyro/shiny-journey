@@ -73,10 +73,20 @@ GameConfig.BRUSH_STAMP_IMAGE_ID = "rbxassetid://0"
 GameConfig.MAX_STROKE_POINTS_PER_BATCH = 24
 GameConfig.MAX_ACTIVE_STAMPS_PER_PLAYER = 150
 
--- === Обнаружение (поимка) ===
-GameConfig.CATCH_MAX_DISTANCE = 8          -- на каком расстоянии искатель может поймать (в стадах)
-GameConfig.CATCH_DISTANCE_TOLERANCE = 4    -- запас на задержку сети/движение при серверной проверке дистанции
-GameConfig.CATCH_HOLD_DURATION = 0.6       -- сколько держать кнопку "Поймать" (мешает случайным тапам)
+-- === Обнаружение (поимка) - см. DECISIONS.md, п.29 (пересмотрено MEGA_PLAN
+-- 3.2/Q1: дистанционная метка вместо подхода вплотную, ближе к оригиналу) ===
+-- "RangedTag" - Seeker стреляет/метит с дистанции (текущий режим);
+-- "Proximity" - старый режим подхода вплотную, оставлен как аварийный
+-- переключатель до живого теста RangedTag; после успешного теста
+-- Proximity-ветку можно будет удалить (TODO).
+GameConfig.CATCH_MODE = "RangedTag"
+GameConfig.TAG_MAX_DISTANCE = 60            -- дальность метки (в стадах)
+GameConfig.TAG_COOLDOWN_SECONDS = 1         -- не чаще одной попытки метки в секунду
+GameConfig.TAG_MISS_PENALTY_POINTS = 5      -- штраф очков за промах
+
+GameConfig.CATCH_MAX_DISTANCE = 8          -- Proximity: на каком расстоянии искатель может поймать (в стадах)
+GameConfig.CATCH_DISTANCE_TOLERANCE = 4    -- Proximity: запас на задержку сети/движение при серверной проверке дистанции
+GameConfig.CATCH_HOLD_DURATION = 0.6       -- Proximity: сколько держать кнопку "Поймать" (мешает случайным тапам)
 
 -- === Очки: базовые + Missed Point Ranking (см. DECISIONS.md, п.22) ===
 -- Как часто проверять, не видит ли какой-нибудь Seeker текущего Hider -

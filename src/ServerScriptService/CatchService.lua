@@ -1,22 +1,31 @@
 -- CatchService.lua
 -- Отвечает за обнаружение (поимку) прячущихся игроков искателями.
--- Используем ProximityPrompt, но серверный Triggered - НЕ источник истины сам по
+-- Два режима (GameConfig.CATCH_MODE, см. DECISIONS.md, п.29):
+-- "RangedTag" (текущий, по умолчанию) - Seeker стреляет/метит с дистанции,
+-- ближе к оригиналу; "Proximity" (старый) - подход вплотную с
+-- ProximityPrompt, оставлен как аварийный переключатель до живого теста
+-- RangedTag. В Proximity серверный Triggered - НЕ источник истины сам по
 -- себе (эксплойт fireproximityprompt может вызвать его без реальной близости -
 -- см. DECISIONS.md, п.4), поэтому в TryCatch мы дублируем на сервере и дистанцию,
 -- и проверку прямого взгляда (line of sight).
 
 local Teams = game:GetService("Teams")
 local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
 local LineOfSightUtil = require(script.Parent.LineOfSightUtil)
 local RoleUtil = require(ReplicatedStorage.Modules.RoleUtil)
+-- Только для проверки текущей фазы раунда (RoundManager.State), см.
+-- FreezeService.lua - там же комментарий, почему это не создаёт цикл require.
+local RoundManager = require(script.Parent.RoundManager)
 
 local CatchService = {}
 
-local activePrompts = {} -- [Player] = ProximityPrompt
+local activePrompts = {} -- [Player] = ProximityPrompt (только режим Proximity)
 local foundState = {}    -- [Player] = true/false
+local lastTagAt = {}     -- [Player] = tick() последней попытки метки (только RangedTag)
 local remotesRef
 local ScoreServiceRef
 local onAllCaughtCallback
@@ -60,13 +69,22 @@ local function attachPromptToHider(hiderPlayer)
 	return prompt
 end
 
--- Вызывается в начале фазы поиска - расставляет промпты на всех Hiders
+-- Вызывается в начале фазы поиска - помечает всех Hiders как "не найден" и,
+-- только в режиме Proximity, расставляет промпты.
 function CatchService.StartSeekingPhase(hiders)
 	foundState = {}
-	local allPrompts = {}
+	lastTagAt = {}
 
 	for _, hider in ipairs(hiders) do
 		foundState[hider] = false
+	end
+
+	if GameConfig.CATCH_MODE ~= "Proximity" then
+		return -- в RangedTag прятать нечего - промптов вообще нет
+	end
+
+	local allPrompts = {}
+	for _, hider in ipairs(hiders) do
 		local prompt = attachPromptToHider(hider)
 		if prompt then
 			table.insert(allPrompts, prompt)
@@ -94,6 +112,7 @@ function CatchService.EndRound()
 	end
 	activePrompts = {}
 	foundState = {}
+	lastTagAt = {}
 	onAllCaughtCallback = nil
 	onCatchCallback = nil
 end
@@ -112,6 +131,39 @@ function CatchService.IsFound(player)
 	return foundState[player] == true
 end
 
+-- Общее для обоих режимов: применяет саму поимку, когда все проверки уже
+-- пройдены (роль/фаза/дистанция или raycast - в зависимости от режима).
+local function registerCatch(seekerPlayer, hiderPlayer)
+	foundState[hiderPlayer] = true
+
+	local prompt = activePrompts[hiderPlayer]
+	if prompt then
+		prompt.Enabled = false
+	end
+
+	if ScoreServiceRef then
+		ScoreServiceRef.OnHiderCaught(hiderPlayer, seekerPlayer)
+	end
+
+	if remotesRef then
+		remotesRef.PlayerCaught:FireAllClients(hiderPlayer.Name, seekerPlayer.Name, CatchService.CountRemaining())
+	end
+
+	-- Даёт RoundManager шанс отреагировать на конкретную поимку (например,
+	-- перевести пойманного в Seekers в режиме Infection - см. DECISIONS.md,
+	-- п.18) ДО проверки "все ли найдены", чтобы переход роли гарантированно
+	-- успел примениться, даже если это была поимка последнего Hider.
+	if onCatchCallback then
+		onCatchCallback(hiderPlayer, seekerPlayer)
+	end
+
+	if CatchService.CountRemaining() <= 0 and onAllCaughtCallback then
+		onAllCaughtCallback()
+	end
+end
+
+-- Режим Proximity (аварийный переключатель, см. DECISIONS.md, п.29) -
+-- вызывается из Triggered промпта.
 function CatchService.TryCatch(seekerPlayer, hiderPlayer)
 	-- Проверяем на сервере, что всё по-честному: искатель - правда искатель,
 	-- а найденный - правда прячущийся и ещё не найден
@@ -140,31 +192,65 @@ function CatchService.TryCatch(seekerPlayer, hiderPlayer)
 		return
 	end
 
-	foundState[hiderPlayer] = true
+	registerCatch(seekerPlayer, hiderPlayer)
+end
 
-	local prompt = activePrompts[hiderPlayer]
-	if prompt then
-		prompt.Enabled = false
+-- Режим RangedTag (текущий, см. DECISIONS.md, п.29) - Seeker "стреляет"
+-- направлением камеры; сервер сам считает origin и raycast, клиенту
+-- доверяем только направление (юнит-вектор - непроверяемая честная
+-- граница доверия, как у любого шутера).
+local function onRequestTag(seekerPlayer, direction)
+	if typeof(direction) ~= "Vector3" then
+		return
 	end
 
+	local magnitude = direction.Magnitude
+	if magnitude < 0.99 or magnitude > 1.01 then
+		return -- не юнит-вектор - подозрительный пакет
+	end
+
+	if not RoleUtil.IsSeeker(seekerPlayer) then
+		return
+	end
+
+	if RoundManager.State ~= "Seeking" then
+		return
+	end
+
+	if tick() - (lastTagAt[seekerPlayer] or 0) < GameConfig.TAG_COOLDOWN_SECONDS then
+		return -- рейт-лимит: не чаще одной попытки в TAG_COOLDOWN_SECONDS
+	end
+	lastTagAt[seekerPlayer] = tick()
+
+	local character = seekerPlayer.Character
+	local head = character and character:FindFirstChild("Head")
+	if not head then
+		return
+	end
+
+	-- Origin - серверная позиция головы стрелка (НЕ присланная клиентом!) -
+	-- иначе читер мог бы "стрелять" из чужой/произвольной точки карты.
+	-- Exclude - ТОЛЬКО персонаж стрелка: мы ХОТИМ попасть в чужие тела.
+	local raycastParams = RaycastParams.new()
+	raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+	raycastParams.FilterDescendantsInstances = { character }
+
+	local result = Workspace:Raycast(head.Position, direction * GameConfig.TAG_MAX_DISTANCE, raycastParams)
+
+	if result and result.Instance then
+		local hitCharacter = result.Instance:FindFirstAncestorOfClass("Model")
+		local hitPlayer = hitCharacter and Players:GetPlayerFromCharacter(hitCharacter)
+		if hitPlayer and RoleUtil.IsHider(hitPlayer) and foundState[hitPlayer] == false then
+			registerCatch(seekerPlayer, hitPlayer)
+			return
+		end
+	end
+
+	-- Промах: луч ни во что не попал, попал в мир/декорации, или попал в
+	-- уже найденного Hider'а/не-игрока - простое правило "не попал в живую
+	-- цель = промах", штрафуем очки.
 	if ScoreServiceRef then
-		ScoreServiceRef.OnHiderCaught(hiderPlayer, seekerPlayer)
-	end
-
-	if remotesRef then
-		remotesRef.PlayerCaught:FireAllClients(hiderPlayer.Name, seekerPlayer.Name, CatchService.CountRemaining())
-	end
-
-	-- Даёт RoundManager шанс отреагировать на конкретную поимку (например,
-	-- перевести пойманного в Seekers в режиме Infection - см. DECISIONS.md,
-	-- п.18) ДО проверки "все ли найдены", чтобы переход роли гарантированно
-	-- успел примениться, даже если это была поимка последнего Hider.
-	if onCatchCallback then
-		onCatchCallback(hiderPlayer, seekerPlayer)
-	end
-
-	if CatchService.CountRemaining() <= 0 and onAllCaughtCallback then
-		onAllCaughtCallback()
+		ScoreServiceRef.AddRoundPoints(seekerPlayer, -GameConfig.TAG_MISS_PENALTY_POINTS)
 	end
 end
 
@@ -205,8 +291,14 @@ end
 -- (foundState оставался false, но ловить было физически нечего) - раунд в
 -- Infection не мог закончиться, если оставался только ресетнувшийся Hider.
 -- Перевешиваем промпт на новое тело и снова прячем его от других Hiders.
--- См. AUDIT_FABLE5.md, K1.
+-- См. AUDIT_FABLE5.md, K1. Актуально ТОЛЬКО для режима Proximity - в
+-- RangedTag промптов нет вообще, перевешивать нечего (raycast и так бьёт
+-- по актуальному персонажу через Players:GetPlayerFromCharacter).
 local function onCharacterRespawn(player)
+	if GameConfig.CATCH_MODE ~= "Proximity" then
+		return
+	end
+
 	if foundState[player] ~= false then
 		return -- не участвует в этом раунде как непойманный Hider
 	end
@@ -239,7 +331,14 @@ function CatchService.Init(remotes, scoreService)
 	remotesRef = remotes
 	ScoreServiceRef = scoreService
 
+	if GameConfig.CATCH_MODE == "RangedTag" then
+		remotes.RequestTag.OnServerEvent:Connect(onRequestTag)
+	end
+
 	Players.PlayerRemoving:Connect(onHiderLeft)
+	Players.PlayerRemoving:Connect(function(player)
+		lastTagAt[player] = nil
+	end)
 
 	Players.PlayerAdded:Connect(function(player)
 		player.CharacterAdded:Connect(function()

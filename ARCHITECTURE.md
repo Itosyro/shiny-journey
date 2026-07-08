@@ -26,9 +26,10 @@ Main.client ─ инициализирует:              Main.server ─ ин�
   FreezeClient  ──RequestFreeze(pose)───►    FreezeService ──require──► RoundManager (для проверки фазы)
   RoundUIClient ◄─RoundStateChanged─────     RoundManager  (главный автомат, требует GameMode)
                 ◄─RoundTimerTick───────      PlayerRoleService
-                ◄─PlayerCaught────────       CatchService (ProximityPrompt + серверные
-  CatchClient   ◄─HideCatchPromptsFromHiders  дистанция/line-of-sight проверки; OnCatch-хук
-  PaintClient   ◄─InkUpdate─────────────      для перехода роли в Infection, см. DECISIONS 18)
+                ◄─PlayerCaught────────       CatchService (режим RangedTag - серверный raycast
+  CatchClient   ◄─HideCatchPromptsFromHiders  из головы Seeker'а, см. DECISIONS 29; режим
+  CatchClient   ──RequestTag(direction)─►     Proximity - аварийный переключатель, DECISIONS 4/12)
+  PaintClient   ◄─InkUpdate─────────────      OnCatch-хук для перехода роли в Infection (DECISIONS 18)
   WhistleClient ──RequestWhistle────────►    WhistleService (Sound со смещением + RollOff, см. DECISIONS 27)
   WhistleClient ◄─WhistleCountdownUpdate      ScoreService ──require──► CatchService, LineOfSightUtil
   RoundUIClient ◄─MissedPointRankingUpdate    (Missed Point Ranking, только самому Hider'у, см. DECISIONS 22)
@@ -187,7 +188,8 @@ buildLobbyPlatform` (заменила `buildSeekerWaitingRoom`) - остальн
 | `RoundTimerTick` | сервер → все клиенты | `remaining: number` | Тик таймера текущей фазы (раз в секунду). |
 | `PlayerCaught` | сервер → все клиенты | `hiderName: string`, `seekerName: string`, `remaining: number` | Кого-то поймали + сколько осталось. |
 | `InkUpdate` | сервер → **один** клиент | `amount: number`, `maxAmount: number` | Обновление количества "чернил" кисти конкретного игрока (замена прежних дискретных "зарядов", см. `DECISIONS.md`, п.14). Отправляется только в фазах `Hiding`/`Lobby` (см. `AUDIT_FABLE5.md`, S9). |
-| `HideCatchPromptsFromHiders` | сервер → **только Hiders**, персонально каждому | `prompts: {ProximityPrompt}` | Список всех активных промптов поимки за раунд; клиент локально ставит им `Enabled = false`, чтобы Hiders не видели, где стоят другие Hiders (см. `DECISIONS.md`, п.12). Seekers это событие не получают. |
+| `HideCatchPromptsFromHiders` | сервер → **только Hiders**, персонально каждому | `prompts: {ProximityPrompt}` | Режим Proximity (аварийный переключатель, см. `DECISIONS.md`, п.29): список всех активных промптов поимки за раунд; клиент локально ставит им `Enabled = false`, чтобы Hiders не видели, где стоят другие Hiders (см. `DECISIONS.md`, п.12). В режиме RangedTag (текущий) не отправляется - промптов нет. |
+| `RequestTag` | клиент → сервер | `direction: Vector3` (юнит-вектор направления камеры) | Режим RangedTag (текущий, см. `DECISIONS.md`, п.29): Seeker "стреляет" меткой. Сервер сам берёт origin (позиция головы Seeker'а), строит raycast на `TAG_MAX_DISTANCE`, засчитывает поимку при попадании в непойманного Hider, иначе штрафует `TAG_MISS_PENALTY_POINTS` очков. Кулдаун `TAG_COOLDOWN_SECONDS`. |
 | `RequestWhistle` | клиент → сервер | (без параметров) | Hider добровольно просит свистнуть прямо сейчас. Сервер проверяет роль/фазу (только `Seeking`)/не пойман ли/кулдаун, проигрывает звук из точки, смещённой от игрока, и начисляет очки за смелость, если рядом Seeker - см. `DECISIONS.md`, п.27. |
 | `WhistleCountdownUpdate` | сервер → **только свистнувшему**, персонально | `cooldownSeconds: number` | Отправляется в момент свистка - длительность перезарядки (`GameConfig.WHISTLE_COOLDOWN_SECONDS`), клиент анимирует полоску одним твином. |
 | `CreatePrivateRoom` | клиент → сервер | `password: string` | Создать приватную комнату с этим паролем. Сервер валидирует длину, резервирует сервер (`TeleportService:ReserveServerAsync`), сохраняет пару пароль→код в `MemoryStoreService` и телепортирует создателя, см. `DECISIONS.md`, п.20. |
@@ -227,7 +229,8 @@ RemoteFunctions в проекте **не используются** (всё по
 | `FreezeService` | `activePose[player] = string` | id текущего пресета позы (например `"Crouch"`), только пока `frozenState[player] == true` |
 | `FreezeService` | `savedLocomotion[player] = {walkSpeed, jumpPower, jumpHeight, hipHeight}` | исходные параметры движения и "hitbox-профиля" (`HipHeight`), чтобы вернуть после позы |
 | `CatchService` | `foundState[player] = bool` | найден ли этот Hider (только участники текущего раунда) |
-| `CatchService` | `activePrompts[player] = ProximityPrompt` | висящий на игроке промпт поимки (`ActionText = "Поймать"`, без имени, `RequiresLineOfSight = true`) |
+| `CatchService` | `activePrompts[player] = ProximityPrompt` | режим Proximity: висящий на игроке промпт поимки (`ActionText = "Поймать"`, без имени, `RequiresLineOfSight = true`) |
+| `CatchService` | `lastTagAt[player] = tick()` | режим RangedTag: когда этот Seeker последний раз пытался метить (кулдаун, см. `DECISIONS.md`, п.29) |
 | `ScoreService` | `totalScores[player] = number` | очки за всю сессию сервера |
 | `ScoreService` | `roundScores[player] = number` | очки за текущий раунд |
 | `ScoreService` | `roundStartTimes[player] = tick()` | когда для Hider началась фаза поиска |
@@ -277,8 +280,9 @@ RemoteFunctions в проекте **не используются** (всё по
      • Hiders продолжают краситься/двигаться/менять позу  │
        (докраска в Seeking разрешена - DECISIONS 28);     │
        пойманный (Classic) красить уже не может           │
-     • на Hiders повешены ProximityPrompt (видны только │
-       Seekers, требуют line-of-sight - см. DECISIONS 12)│
+     • Seeker метит Hiders выстрелом-раскастом с дистанции  │
+       до 60 стадов (режим RangedTag, DECISIONS 29); промах │
+       штрафует очки, попадание засчитывает поимку          │
      • Hider может добровольно свистнуть (раз в            │
        WHISTLE_COOLDOWN_SECONDS) - звук со смещением от    │
        позиции + очки за смелость, если рядом Seeker (DECISIONS 27)│
