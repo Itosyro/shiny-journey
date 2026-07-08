@@ -235,10 +235,11 @@ RemoteFunctions в проекте **не используются** (всё по
 | `CatchService` | `foundState[player] = bool` | найден ли этот Hider (только участники текущего раунда) |
 | `CatchService` | `activePrompts[player] = ProximityPrompt` | режим Proximity: висящий на игроке промпт поимки (`ActionText = "Поймать"`, без имени, `RequiresLineOfSight = true`) |
 | `CatchService` | `lastTagAt[player] = tick()` | режим RangedTag: когда этот Seeker последний раз пытался метить (кулдаун, см. `DECISIONS.md`, п.29) |
-| `ScoreService` | `totalScores[player] = number` | очки за всю сессию сервера |
+| `ScoreService` | `totalScores[player] = number` | очки за всю сессию сервера (+ загруженные из DataStore прошлых сессий, см. `DECISIONS.md`, п.32) |
 | `ScoreService` | `roundScores[player] = number` | очки за текущий раунд |
 | `ScoreService` | `roundStartTimes[player] = tick()` | когда для Hider началась фаза поиска |
 | `ScoreService` | `missedPointScores[player] = number` | очки Missed Point Ranking за текущий раунд (см. `DECISIONS.md`, п.22) |
+| `ScoreService` | `loadSucceeded[player] = bool` | удалась ли загрузка очков при входе - сохранять при выходе можно только если true (см. `DECISIONS.md`, п.32) |
 | `WhistleService` | `lastWhistleAt[player] = tick()` | когда этот Hider свистел в последний раз (кулдаун, см. `DECISIONS.md`, п.27) |
 | `RoundManager` | `currentHiders`, `currentSeekers` | списки игроков по ролям в текущем раунде |
 | `PlayerRoleService` | Teams | роль игрока хранится штатно в `player.Team` |

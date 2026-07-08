@@ -17,13 +17,19 @@ local LineOfSightUtil = require(script.Parent.LineOfSightUtil)
 -- т.к. CatchService получает ScoreService через Init-инъекцию, а не через
 -- require (тот же паттерн, что уже используется в WhistleService.lua).
 local CatchService = require(script.Parent.CatchService)
+local ScorePersistence = require(script.Parent.ScorePersistence)
 
 local ScoreService = {}
 
-local totalScores = {}       -- [Player] = очки за всю игровую сессию сервера
+local totalScores = {}       -- [Player] = очки за всю игровую сессию сервера (+ сохранённые прошлых сессий)
 local roundStartTimes = {}   -- [Player] = tick(), когда началась фаза поиска (для Hiders)
 local roundScores = {}       -- [Player] = очки конкретно за текущий раунд
 local missedPointScores = {} -- [Player] = очки Missed Point Ranking конкретно за этот раунд
+-- [Player] = true, если загрузка сохранённых очков при входе прошла
+-- успешно - сохраняем при выходе ТОЛЬКО в этом случае (см. DECISIONS.md,
+-- п.32): если DataStore был недоступен при загрузке, играть с 0 можно, но
+-- сохранять этот 0 обратно нельзя - затрёт реальное значение игрока.
+local loadSucceeded = {}
 
 local POINTS_PER_CATCH = 20
 local POINTS_PER_SECOND_HIDDEN = 1
@@ -35,17 +41,57 @@ local remotesRef
 -- тот же паттерн "токена раунда", что уже используется в WhistleService.watchLoop.
 local missedPointRoundToken = 0
 
+-- Сохранённые прошлой сессией очки - подставляются ОДИН раз при входе
+-- (см. ScoreService.Init), до этого игрок числится с 0 (GetTotal). Не
+-- используется для очков конкретно этого раунда (roundScores) - только
+-- для totalScores.
+function ScoreService.SeedTotal(player, value)
+	totalScores[player] = value
+end
+
+-- Сохраняет очки одного игрока, только если загрузка при входе прошла
+-- успешно (см. loadSucceeded выше) - общая функция для PlayerRemoving и
+-- BindToClose, чтобы не дублировать эту проверку в двух местах.
+local function persistIfLoaded(player)
+	if loadSucceeded[player] then
+		ScorePersistence.Save(player, totalScores[player] or 0)
+	end
+end
+
 function ScoreService.Init(remotes)
 	remotesRef = remotes
+
+	-- Загружаем сохранённый счёт при входе - ScorePersistence сама делает
+	-- ретрай и решает, успешна ли загрузка (см. DECISIONS.md, п.32).
+	Players.PlayerAdded:Connect(function(player)
+		local value, ok = ScorePersistence.Load(player)
+		loadSucceeded[player] = ok
+		if ok and value then
+			ScoreService.SeedTotal(player, value)
+		end
+	end)
 
 	-- Как и все остальные сервисы (см. ARCHITECTURE.md, "Состояние на сервере"),
 	-- чистим состояние вышедшего игрока - иначе таблицы копят записи по мёртвым
 	-- объектам Player весь срок жизни сервера (найдено аудитом Fable 5).
+	-- Сохранение - ДО очистки totalScores, иначе нечего будет сохранять.
 	Players.PlayerRemoving:Connect(function(player)
+		persistIfLoaded(player)
+
 		totalScores[player] = nil
 		roundScores[player] = nil
 		roundStartTimes[player] = nil
 		missedPointScores[player] = nil
+		loadSucceeded[player] = nil
+	end)
+
+	-- Обязательно - иначе очки игроков, всё ещё на сервере в момент его
+	-- выключения (обновление/деплой), теряются: PlayerRemoving в этом
+	-- случае не успевает сработать для всех.
+	game:BindToClose(function()
+		for _, player in ipairs(Players:GetPlayers()) do
+			persistIfLoaded(player)
+		end
 	end)
 end
 
