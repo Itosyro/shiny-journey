@@ -23,15 +23,15 @@ Claude Fable 5 (все 33 .lua-файла построчно). Полный от
 - [x] **(K3)** Рисование молча не работало бы на 120-240 Гц устройствах —
   буфер точек превышал серверный лимит пакета, сервер отклонял пакет
   целиком. `PaintClient.lua`. ✅ Исправлено аудитом (отсечка буфера).
-- [ ] **(K1)** Hider после "Reset Character" посреди Seeking неуловим —
+- [x] **(K1)** Hider после "Reset Character" посреди Seeking неуловим —
   промпт поимки не перевешивается на новый персонаж; в Infection раунд
-  не может закончиться досрочно. `CatchService.lua`, `Init`: добавить
-  `Players.PlayerAdded` → `player.CharacterAdded`-обработчик (образец —
-  `SpectatorService.Init`); внутри: если `foundState[player] == false`,
-  вызвать `attachPromptToHider(player)` и разослать новый промпт
-  массивом из одного элемента через `HideCatchPromptsFromHiders` всем
-  игрокам команды Hiders (клиент менять не надо). Подробности — K1 в
-  `AUDIT_FABLE5.md`.
+  не может закончиться досрочно. `CatchService.lua`: добавлен
+  `Players.PlayerAdded` → `CharacterAdded`-обработчик (образец —
+  `SpectatorService.Init`) + новая `onCharacterRespawn` — если
+  `foundState[player] == false`, ждёт `HumanoidRootPart` нового тела,
+  перевешивает промпт через `attachPromptToHider` и прячет его от всех
+  Hiders через `HideCatchPromptsFromHiders` (роль проверяется через
+  `RoleUtil.IsHider`, модуль уже работает на сервере). ✅ Исправлено.
   ✔ Hider ресетнулся в Seeking → Seeker всё ещё может его поймать;
   другие Hiders его новый промпт не видят.
 

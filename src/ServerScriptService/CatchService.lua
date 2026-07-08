@@ -11,6 +11,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
 local LineOfSightUtil = require(script.Parent.LineOfSightUtil)
+local RoleUtil = require(ReplicatedStorage.Modules.RoleUtil)
 
 local CatchService = {}
 
@@ -198,11 +199,53 @@ local function onHiderLeft(player)
 	end
 end
 
+-- Если Hider нажал "Reset Character" посреди фазы поиска - старый
+-- ProximityPrompt пропадает вместе со старым телом, и до этого фикса
+-- CatchService переставал давать Seekers возможность поймать этого игрока
+-- (foundState оставался false, но ловить было физически нечего) - раунд в
+-- Infection не мог закончиться, если оставался только ресетнувшийся Hider.
+-- Перевешиваем промпт на новое тело и снова прячем его от других Hiders.
+-- См. AUDIT_FABLE5.md, K1.
+local function onCharacterRespawn(player)
+	if foundState[player] ~= false then
+		return -- не участвует в этом раунде как непойманный Hider
+	end
+
+	task.defer(function()
+		local character = player.Character
+		if not character then
+			return
+		end
+		if not character:FindFirstChild("HumanoidRootPart") then
+			character:WaitForChild("HumanoidRootPart", 5)
+		end
+
+		local prompt = attachPromptToHider(player)
+		if not prompt or not remotesRef then
+			return
+		end
+
+		-- Тот же приём, что в StartSeekingPhase: прячем новый промпт от всех
+		-- Hiders, чтобы ресет персонажа не выдал позицию другим прячущимся.
+		for _, otherPlayer in ipairs(Players:GetPlayers()) do
+			if RoleUtil.IsHider(otherPlayer) then
+				remotesRef.HideCatchPromptsFromHiders:FireClient(otherPlayer, { prompt })
+			end
+		end
+	end)
+end
+
 function CatchService.Init(remotes, scoreService)
 	remotesRef = remotes
 	ScoreServiceRef = scoreService
 
 	Players.PlayerRemoving:Connect(onHiderLeft)
+
+	Players.PlayerAdded:Connect(function(player)
+		player.CharacterAdded:Connect(function()
+			onCharacterRespawn(player)
+		end)
+	end)
 end
 
 return CatchService
