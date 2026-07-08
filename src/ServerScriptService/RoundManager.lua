@@ -83,6 +83,20 @@ end
 local function runHidingPhase()
 	broadcastState("Hiding", GameConfig.HIDING_PHASE_DURATION)
 
+	-- Экс-зритель, только что ставший Seeker, ещё может не иметь персонажа
+	-- (LoadCharacter из SpectatorService.ExitSpectator асинхронный) - без
+	-- ожидания teleportPlayersTo молча пропустил бы такого игрока, и он
+	-- остался бы бегать по карте всю фазу пряток, увидев всех Hiders живьём.
+	-- Максимум 2с на игрока, вышедших пропускаем по seeker.Parent == nil.
+	for _, seeker in ipairs(currentSeekers) do
+		for _ = 1, 20 do
+			if seeker.Character ~= nil or seeker.Parent == nil then
+				break
+			end
+			task.wait(0.1)
+		end
+	end
+
 	-- Искателей запираем в комнате ожидания на время пряток
 	teleportPlayersTo(currentSeekers, findSpawnByName("SeekerWaitingRoom"))
 	for _, seeker in ipairs(currentSeekers) do
