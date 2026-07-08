@@ -120,9 +120,12 @@ Claude Fable 5 (все 33 .lua-файла построчно). Полный от
   `hud.SetMissedPointText("")`, если `RoleUtil.IsHider(player)` стал
   ложным. ✅ Исправлено.
   ✔ После заражения лейбл исчезает.
-- [ ] **(S9)** Не слать InkUpdate вне фазы Hiding.
-  `PaintService.rechargeLoop`: пропускать `sendInkUpdate`, когда
-  `RoundManager.State ~= "Hiding"` (сама регенерация остаётся).
+- [x] **(S9)** Не слать InkUpdate вне фазы Hiding.
+  `PaintService.rechargeLoop`: `sendInkUpdate` теперь вызывается только
+  при `RoundManager.State == "Hiding" or RoundManager.State == "Lobby"`
+  (сама регенерация остаётся всегда) - условие сразу в редакции
+  MEGA_PLAN 1.3.4, чтобы не переделывать при добавлении кисти в лобби
+  (B1.3). ✅ Исправлено.
   ✔ В Seeking нет входящих InkUpdate у клиентов.
 
 ### A4. НИЗКИЙ (полировка)

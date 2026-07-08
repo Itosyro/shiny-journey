@@ -65,7 +65,14 @@ local function rechargeLoop()
 		for player, data in pairs(inkData) do
 			if data.amount < GameConfig.MAX_INK then
 				data.amount = math.min(GameConfig.MAX_INK, data.amount + GameConfig.INK_REGEN_PER_SECOND)
-				sendInkUpdate(player)
+
+				-- Полоска чернил видна только там, где вообще можно красить -
+				-- Hiding, и будущая фаза Lobby (тренировка кисти, MEGA_PLAN 1.3) -
+				-- лишний трафик клиентам, которым сейчас нечего показывать
+				-- (Seeking/RoundEnd), см. AUDIT_FABLE5.md, S9.
+				if RoundManager.State == "Hiding" or RoundManager.State == "Lobby" then
+					sendInkUpdate(player)
+				end
 			end
 		end
 	end
