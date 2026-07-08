@@ -168,6 +168,14 @@ end
 -- Копит точку мазка в буфер (в нормализованных face/u/v, см. BrushGeometry) -
 -- реальная отправка идёт пакетом в strokeBatchLoop, не отсюда.
 local function addStrokePoint(screenPosition)
+	-- Сервер отклоняет пакет ЦЕЛИКОМ, если в нём больше MAX_STROKE_POINTS_PER_BATCH
+	-- точек (см. PaintService.onPaintStroke) - на устройствах со 120-240 Гц ввода
+	-- InputChanged успевает накопить за 0.15с больше лимита, и без этой отсечки
+	-- рисование молча переставало бы работать (найдено аудитом Fable 5).
+	if #strokeBuffer >= GameConfig.MAX_STROKE_POINTS_PER_BATCH then
+		return
+	end
+
 	local result = raycastOwnCharacter(screenPosition)
 	if not result or not result.Instance or not result.Instance:IsA("BasePart") then
 		return

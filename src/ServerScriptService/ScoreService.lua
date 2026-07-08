@@ -37,6 +37,16 @@ local missedPointRoundToken = 0
 
 function ScoreService.Init(remotes)
 	remotesRef = remotes
+
+	-- Как и все остальные сервисы (см. ARCHITECTURE.md, "Состояние на сервере"),
+	-- чистим состояние вышедшего игрока - иначе таблицы копят записи по мёртвым
+	-- объектам Player весь срок жизни сервера (найдено аудитом Fable 5).
+	Players.PlayerRemoving:Connect(function(player)
+		totalScores[player] = nil
+		roundScores[player] = nil
+		roundStartTimes[player] = nil
+		missedPointScores[player] = nil
+	end)
 end
 
 function ScoreService.GetTotal(player)

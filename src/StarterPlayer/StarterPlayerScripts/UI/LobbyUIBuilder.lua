@@ -232,8 +232,12 @@ function LobbyUIBuilder.Create(screenGui, options)
 	end)
 
 	local function clearPlayerRows()
+		-- Строки списка - TextLabel (см. UpdatePlayers ниже), НЕ Frame. Проверка
+		-- именно по TextLabel: раньше тут стояло IsA("Frame"), из-за чего строки
+		-- никогда не удалялись и список дублировался при каждом входе/выходе
+		-- игрока (найдено аудитом Fable 5, см. AUDIT_FABLE5.md).
 		for _, child in ipairs(scrollFrame:GetChildren()) do
-			if child:IsA("Frame") then
+			if child:IsA("TextLabel") then
 				child:Destroy()
 			end
 		end
