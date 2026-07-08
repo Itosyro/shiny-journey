@@ -35,7 +35,12 @@ local function sendError(player, message)
 end
 
 -- Обрезаем пробелы и приводим к нижнему регистру - чтобы "Friends2026" и
--- "friends2026" считались одним и тем же паролем.
+-- "friends2026" считались одним и тем же паролем. ВАЖНО: string.lower() в
+-- Luau понимает только латиницу A-Z - кириллица им не трогается, поэтому
+-- "ДОМ1" и "дом1" - РАЗНЫЕ пароли (регистр важен для кириллицы). Это
+-- сознательный компромисс (полноценный Unicode-lower без библиотек в Luau
+-- не сделать), задокументирован здесь и должен быть виден как подсказка в
+-- UI ввода пароля.
 local function normalizePassword(rawPassword)
 	if typeof(rawPassword) ~= "string" then
 		return nil
@@ -47,10 +52,18 @@ local function normalizePassword(rawPassword)
 	return trimmed:lower()
 end
 
+-- utf8.len (не #password) - #password считает БАЙТЫ, а не символы: у
+-- кириллицы это 2 байта на букву, поэтому лимит "минимум 4" в байтах
+-- реально требовал бы всего 2 кириллических буквы (см. AUDIT_FABLE5.md, S5).
 local function isValidPassword(password)
-	return password ~= nil
-		and #password >= GameConfig.PRIVATE_ROOM_PASSWORD_MIN_LENGTH
-		and #password <= GameConfig.PRIVATE_ROOM_PASSWORD_MAX_LENGTH
+	if password == nil then
+		return false
+	end
+
+	local length = utf8.len(password)
+	return length ~= nil
+		and length >= GameConfig.PRIVATE_ROOM_PASSWORD_MIN_LENGTH
+		and length <= GameConfig.PRIVATE_ROOM_PASSWORD_MAX_LENGTH
 end
 
 -- Не более GameConfig.PRIVATE_ROOM_JOIN_ATTEMPT_LIMIT попыток "Присоединиться"

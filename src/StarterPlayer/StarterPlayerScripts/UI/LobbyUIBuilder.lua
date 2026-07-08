@@ -128,7 +128,10 @@ function LobbyUIBuilder.Create(screenGui, options)
 	passwordBox.Position = UDim2.new(0, 20, 0, 60)
 	passwordBox.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 	passwordBox.TextColor3 = Color3.fromRGB(255, 255, 255)
-	passwordBox.PlaceholderText = "Пароль комнаты"
+	-- Подсказка про регистр кириллицы - see AUDIT_FABLE5.md S5:
+	-- string.lower() в Luau не трогает кириллицу, поэтому "ДОМ1" и "дом1" -
+	-- разные пароли (в отличие от латиницы, где регистр не важен).
+	passwordBox.PlaceholderText = "Пароль комнаты (кириллица регистрозависима)"
 	passwordBox.PlaceholderColor3 = Color3.fromRGB(150, 150, 150)
 	passwordBox.Font = Enum.Font.Gotham
 	passwordBox.TextScaled = true
