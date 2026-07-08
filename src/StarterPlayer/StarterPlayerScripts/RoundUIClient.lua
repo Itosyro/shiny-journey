@@ -6,6 +6,7 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GameMode = require(ReplicatedStorage.Modules.GameMode)
+local RoleUtil = require(ReplicatedStorage.Modules.RoleUtil)
 local HUDBuilder = require(script.Parent.UI.HUDBuilder)
 local ResultsUIBuilder = require(script.Parent.UI.ResultsUIBuilder)
 
@@ -81,7 +82,17 @@ function RoundUIClient.Init(remotesFolder)
 
 	-- В режиме Infection роль игрока может смениться прямо во время фазы
 	-- Seeking (пойманный Hider становится Seeker) - подхватываем это здесь.
-	player:GetPropertyChangedSignal("Team"):Connect(updateRoleText)
+	player:GetPropertyChangedSignal("Team"):Connect(function()
+		updateRoleText()
+
+		-- Счётчик Missed Point Ranking - метрика только для Hiders (см.
+		-- DECISIONS.md, п.22); без этого свежезаражённый Seeker продолжал бы
+		-- видеть на HUD последнее значение "Маскировка: N" до конца раунда
+		-- (см. AUDIT_FABLE5.md, S8).
+		if not RoleUtil.IsHider(player) then
+			hud.SetMissedPointText("")
+		end
+	end)
 
 	timerRemote.OnClientEvent:Connect(function(timeLeft)
 		hud.SetTimerSeconds(timeLeft)
