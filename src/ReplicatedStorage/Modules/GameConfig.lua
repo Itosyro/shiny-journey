@@ -4,6 +4,12 @@
 
 local GameConfig = {}
 
+-- === Карта (см. MAPS.md, DECISIONS.md, п.23) ===
+-- true - MapBuilder.lua строит процедурную карту кодом при старте сервера.
+-- Поставь false, если вручную вставишь свою карту в Workspace (например,
+-- через Studio Toolbox) и процедурная генерация не нужна / будет мешать.
+GameConfig.USE_PROCEDURAL_MAP = true
+
 -- === Игроки и лобби ===
 GameConfig.MIN_PLAYERS_TO_START = 2
 -- MAX_PLAYERS здесь - только справочное значение для внутренних расчётов

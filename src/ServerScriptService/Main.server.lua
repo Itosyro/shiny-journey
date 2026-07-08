@@ -3,6 +3,9 @@
 -- Ничего руками менять тут не нужно - если хочешь настроить баланс игры,
 -- смотри ReplicatedStorage/Modules/GameConfig.lua.
 
+local MapBuilder = require(script.Parent.MapBuilder)
+MapBuilder.Build()
+
 local RemotesSetup = require(script.Parent.RemotesSetup)
 local remotes = RemotesSetup.Init()
 

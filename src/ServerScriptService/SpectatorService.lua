@@ -7,6 +7,7 @@
 -- возвращается в общий пул для распределения ролей.
 
 local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local GameConfig = require(ReplicatedStorage.Modules.GameConfig)
@@ -51,6 +52,15 @@ local function hideAndImmobilize(character)
 
 	local rootPart = character:FindFirstChild("HumanoidRootPart")
 	if rootPart then
+		-- Перемещаем к SpectatorSpawn (см. MapBuilder.lua, DECISIONS.md, п.23) -
+		-- даёт зрителю сразу общий вид на карту сверху, а не случайную точку
+		-- пола (обычно там же, где стоял, будучи ещё не-зрителем). Part с этим
+		-- именем - необязательный контракт: если карта его не создала (Part не
+		-- найден), просто оставляем персонажа на месте, как и раньше.
+		local spectatorSpawn = Workspace:FindFirstChild("Map") and Workspace.Map:FindFirstChild("SpectatorSpawn")
+		if spectatorSpawn then
+			rootPart.CFrame = spectatorSpawn.CFrame
+		end
 		rootPart.Anchored = true
 	end
 end
