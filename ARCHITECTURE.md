@@ -109,12 +109,13 @@ buildLobbyPlatform` (заменила `buildSeekerWaitingRoom`) - остальн
   `AssignRoles` не изменилась.
 - **Разрешения фаз (готово)** - `PaintService.onPaintStroke`/
   `FreezeService.onRequestFreeze` разрешают действие ЛЮБОМУ игроку в фазе
-  `Lobby` (тренировка кисти/поз на платформе) - в раунде правила прежние
-  (только Hider, только Hiding). Позже сюда добавится и `Seeking`
-  (докраска, MEGA_PLAN 3.2/Q2). `RoundManager.gameLoop` вызывает
-  `FreezeService.ForceUnfreeze` всем сразу после `AssignRoles`, чтобы
-  никто не вошёл в раунд замороженным с лобби. Гейтинг клиентских панелей
-  (`PaintClient`/`FreezeClient`) зеркалит серверную проверку.
+  `Lobby` (тренировка кисти/поз на платформе); в раунде - только Hider, но
+  теперь в ОБЕИХ фазах (`Hiding` и `Seeking` - докраска и переключение
+  позы во время поиска разрешены, см. `DECISIONS.md`, п.28, MEGA_PLAN
+  3.2/Q2). `RoundManager.gameLoop` вызывает `FreezeService.ForceUnfreeze`
+  всем сразу после `AssignRoles`, чтобы никто не вошёл в раунд
+  замороженным с лобби. Гейтинг клиентских панелей (`PaintClient`/
+  `FreezeClient`) зеркалит серверную проверку.
 - **Ожидание Seekers на платформе (готово)** - `RoundManager.
   runHidingPhase` телепортирует Seekers на `SeekerWaitingRoom`
   (на платформе), но БОЛЬШЕ не отнимает `WalkSpeed`: платформа со всех
@@ -273,7 +274,9 @@ RemoteFunctions в проекте **не используются** (всё по
      • Seekers растворяются на платформе (частицы+твин) и│
        материализуются у SeekerSpawn в здании (teleportWithEffect,│
        MEGA_PLAN 1.6) - все одновременно, ~1с             │
-     • Hiders: рисование запрещено, поза не переключается│
+     • Hiders продолжают краситься/двигаться/менять позу  │
+       (докраска в Seeking разрешена - DECISIONS 28);     │
+       пойманный (Classic) красить уже не может           │
      • на Hiders повешены ProximityPrompt (видны только │
        Seekers, требуют line-of-sight - см. DECISIONS 12)│
      • Hider может добровольно свистнуть (раз в            │

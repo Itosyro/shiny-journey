@@ -26,7 +26,7 @@ local CharacterStyleService = require(script.Parent.CharacterStyleService)
 local RoundManager = require(script.Parent.RoundManager)
 
 PlayerRoleService.Init()
-PaintService.Init(remotes)
+PaintService.Init(remotes, CatchService)
 FreezeService.Init(remotes, PaintService)
 ScoreService.Init(remotes)
 CatchService.Init(remotes, ScoreService)

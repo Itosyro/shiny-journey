@@ -133,21 +133,21 @@ local function applyFreeze(player, wantsFreeze, poseId)
 	end
 end
 
--- Поза - механика только для Hiders, и только пока идёт фаза пряток (Hiding) -
--- ПЛЮС в лобби (на платформе, см. MEGA_PLAN.md 1.3) она доступна ЛЮБОМУ
--- игроку как тренировка пресетов, роли ещё не розданы. Seekers в раунде к
--- ней не имеют доступа вообще (см. DECISIONS.md, п.13): в оригинале
--- искатели не притворяются мебелью. Ограничение "только в Hiding" также не даёт
--- Hider на ходу переключать позу во время поиска (подстроиться под шаги Seeker
--- или внезапно встать/сняться с позы, чтобы сбить с толку) - решение зафиксировано
--- в DECISIONS.md, п.13, включая обсуждение компромисса.
+-- Поза - механика только для Hiders, и только пока идёт раунд (Hiding ИЛИ
+-- Seeking - см. DECISIONS.md, п.28, пересмотрено MEGA_PLAN 3.2/Q2: раньше
+-- Hider не мог переключать позу в Seeking, но сверка с оригиналом
+-- подтвердила, что там можно свободно вставать/выходить из позы и во время
+-- охоты) - ПЛЮС в лобби (на платформе, см. MEGA_PLAN.md 1.3) она доступна
+-- ЛЮБОМУ игроку как тренировка пресетов, роли ещё не розданы. Seekers в
+-- раунде к ней не имеют доступа вообще (см. DECISIONS.md, п.13): в
+-- оригинале искатели не притворяются мебелью.
 local function onRequestFreeze(player, wantsFreeze, poseId)
 	if typeof(wantsFreeze) ~= "boolean" then
 		return
 	end
 
 	local canFreezeNow = RoundManager.State == "Lobby"
-		or (RoundManager.State == "Hiding" and RoleUtil.IsHider(player))
+		or ((RoundManager.State == "Hiding" or RoundManager.State == "Seeking") and RoleUtil.IsHider(player))
 	if not canFreezeNow then
 		return
 	end

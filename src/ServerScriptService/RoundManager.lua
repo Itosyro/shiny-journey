@@ -231,10 +231,10 @@ local function runSeekingPhase()
 	-- Hiding он не отнимался (см. runHidingPhase, MEGA_PLAN.md 1.5).
 	teleportWithEffect(currentSeekers, findAllSpawnsByName("SeekerSpawn"))
 
-	-- Прячущиеся больше не могут красить - маскировка "заморожена" на время поиска
-	for _, hider in ipairs(currentHiders) do
-		services.PaintService.SetPaintingAllowed(hider, false)
-	end
+	-- Hiders больше НЕ теряют доступ к покраске в фазу поиска - подтверждено
+	-- сверкой с оригиналом, что докраска и движение продолжаются после
+	-- начала охоты (см. DECISIONS.md, п.28, MEGA_PLAN 3.2/Q2). Сам механизм
+	-- SetPaintingAllowed остаётся - им пользуется заморозка (FreezeService).
 
 	services.ScoreService.StartRoundTracking(currentHiders, currentSeekers)
 	services.ScoreService.StartMissedPointTracking()

@@ -46,6 +46,7 @@ for _, face in ipairs(BrushGeometry.ValidFaces) do
 end
 
 local remotesRef
+local CatchServiceRef
 
 local function clamp01(n)
 	return math.clamp(n, 0, 1)
@@ -161,10 +162,21 @@ local function onPaintStroke(player, points, brushColor, brushSize)
 
 	-- В лобби (на платформе, см. MEGA_PLAN.md 1.3) красить может ЛЮБОЙ
 	-- игрок - это тренировка кисти, роли ещё не розданы (все в команде
-	-- Spectators). В самом раунде - только Hider, и только в фазу пряток.
+	-- Spectators). В самом раунде - только Hider, и в ОБЕИХ фазах пряток
+	-- и поиска: подтверждено сверкой с оригиналом, что Hiders продолжают
+	-- краситься и двигаться после начала охоты (см. DECISIONS.md, п.28,
+	-- пересмотрено MEGA_PLAN 3.2/Q2 - раньше в Seeking было запрещено).
 	local canPaintNow = RoundManager.State == "Lobby"
-		or (RoundManager.State == "Hiding" and RoleUtil.IsHider(player))
+		or ((RoundManager.State == "Hiding" or RoundManager.State == "Seeking") and RoleUtil.IsHider(player))
 	if not canPaintNow then
+		return
+	end
+
+	-- В режиме Classic пойманный Hider остаётся в команде Hiders (в
+	-- отличие от Infection, где роль сразу меняется на Seeker и отсеклась
+	-- бы проверкой выше) - без этой проверки он мог бы продолжать
+	-- краситься уже после того, как его нашли.
+	if CatchServiceRef and CatchServiceRef.IsFound(player) then
 		return
 	end
 
@@ -217,8 +229,9 @@ local function onPaintStroke(player, points, brushColor, brushSize)
 	sendInkUpdate(player)
 end
 
-function PaintService.Init(remotes)
+function PaintService.Init(remotes, catchService)
 	remotesRef = remotes
+	CatchServiceRef = catchService
 	remotes.PaintStroke.OnServerEvent:Connect(onPaintStroke)
 
 	Players.PlayerRemoving:Connect(function(player)

@@ -31,11 +31,13 @@ function WhistleClient.Init(remotesFolder)
 
 	local root = Instance.new("Frame")
 	root.Name = "WhistlePanel"
-	root.AnchorPoint = Vector2.new(0, 1)
-	-- Позиция поднята выше PosePickerPanel (см. UI/PosePickerUIBuilder.lua),
-	-- которая теперь занимает всю ширину экрана там, где раньше была кнопка
-	-- заморозки (см. DECISIONS.md, п.17)
-	root.Position = UDim2.new(0, 12, 1, -380)
+	-- Правый нижний угол - с B3.Q2 (докраска в Seeking, DECISIONS.md п.28)
+	-- у Hider в фазе Seeking одновременно видны палитра+кисть+позы+свисток;
+	-- слева снизу уже занято PosePickerPanel (см. UI/PosePickerUIBuilder.lua)
+	-- - смещение вправо выбрано вместо подъёма выше, лучше для маленьких
+	-- экранов (см. MEGA_PLAN.md 3.2/Q2).
+	root.AnchorPoint = Vector2.new(1, 1)
+	root.Position = UDim2.new(1, -12, 1, -280)
 	root.Size = UDim2.new(0, 160, 0, 76)
 	root.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 	root.BackgroundTransparency = 0.25
