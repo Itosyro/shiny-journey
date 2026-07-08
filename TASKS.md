@@ -62,12 +62,12 @@ Claude Fable 5 (все 33 .lua-файла построчно). Полный от
   ✅ Исправлено.
   ✔ Экс-зритель-Seeker оказывается в комнате ожидания (нужна проверка
   автором вживую).
-- [ ] **(V5)** Заморозка "залипает" после пересоздания персонажа — игрок
+- [x] **(V5)** Заморозка "залипает" после пересоздания персонажа — игрок
   не может красить до ручного переключения позы. `FreezeService.lua`,
-  `Init`: добавить `Players.PlayerAdded` → `CharacterAdded`-обработчик
-  (образец — SpectatorService): сбросить `frozenState/activePose/
-  savedLocomotion[player]` и вызвать
-  `PaintServiceRef.SetPaintingAllowed(player, true)`.
+  `Init`: добавлен `Players.PlayerAdded` → `CharacterAdded`-обработчик,
+  сбрасывающий `frozenState/activePose/savedLocomotion[player]` и
+  вызывающий `PaintServiceRef.SetPaintingAllowed(player, true)`.
+  ✅ Исправлено.
   ✔ Hider в позе ресетнулся → сразу может рисовать и вставать в позу.
 - [x] **(V6)** Щель в полу в дверном проёме X=25. `MapBuilder.lua`.
   ✅ Исправлено аудитом.

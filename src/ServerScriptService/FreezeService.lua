@@ -191,6 +191,23 @@ function FreezeService.Init(remotes, paintService)
 		activePose[player] = nil
 		savedLocomotion[player] = nil
 	end)
+
+	-- Новый персонаж (например, после кнопки "Reset Character") получает
+	-- дефолтные WalkSpeed/JumpPower от Roblox сам по себе, но наше СОСТОЯНИЕ
+	-- заморозки о старом теле - нет: без сброса игрок "залипал" замороженным
+	-- (paintingBlocked оставался true) до ручного переключения позы. Тут же
+	-- не вызываем applyFreeze(false) - новому телу нечего восстанавливать, у
+	-- него и так стандартные значения (см. AUDIT_FABLE5.md, V5).
+	Players.PlayerAdded:Connect(function(player)
+		player.CharacterAdded:Connect(function()
+			frozenState[player] = nil
+			activePose[player] = nil
+			savedLocomotion[player] = nil
+			if PaintServiceRef then
+				PaintServiceRef.SetPaintingAllowed(player, true)
+			end
+		end)
+	end)
 end
 
 return FreezeService
