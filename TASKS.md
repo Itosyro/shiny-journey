@@ -171,10 +171,20 @@ S1-S9). Развёрнутые рецепты этих багов продубл
 
 ### B1. Лобби-платформа (MEGA_PLAN Часть 1) — порядок: 1.1→1.2→1.3→1.5→1.6→1.4
 
-- [ ] **B1.1** Геометрия платформы в `MapBuilder.lua` (MEGA_PLAN 1.1):
-  парящий цилиндр, бортик+невидимые стены, зона Seeker (центр), 4 врат
-  Hider, перенос спавнов, маркеры `SeekerWaitingRoom`/`HiderSpawn`×N/
-  `SeekerSpawn`×N; удалить старую `buildSeekerWaitingRoom`.
+- [x] **B1.1** Геометрия платформы в `MapBuilder.lua` (MEGA_PLAN 1.1):
+  парящий цилиндр (`buildLobbyPlatform`), бортик+невидимые стены (8
+  сегментов), зона Seeker (центр, `SeekerVolunteerZone`+Billboard), 4
+  врат Hider (`HiderGateZone`+Billboard), 6 спавнов на кольце, маркер
+  `SeekerWaitingRoom` переехал на платформу; старая `buildSeekerWaitingRoom`
+  удалена, `buildLobby` переименована в `buildEntranceHall` (спавны
+  убраны); добавлены 8 маркеров `HiderSpawn` по зонам здания +
+  `RoundManager.teleportPlayersToRandomOf` телепортирует туда Hiders в
+  начале фазы Hiding. Попутно исправлен баг: `findSpawnByName` искал в
+  `Workspace`, а не в `Workspace.Map` (маркеры туда никогда не попадали) -
+  см. `DECISIONS.md`, п.25. `SeekerSpawn`×N (для анимации телепортации) -
+  отложено до B1.6, где оно фактически используется. ✅ Реализовано.
+  ✔ Живая проверка в Studio нужна автором (масштаб, отсутствие щелей в
+  стенах платформы, спавн на платформе, невозможность спрыгнуть).
 - [ ] **B1.2** Выбор роли позицией в `PlayerRoleService.lua`
   (MEGA_PLAN 1.2): `getRoleIntent` + три пула в `AssignRoles`.
 - [ ] **B1.3** Кисть и позы в лобби (MEGA_PLAN 1.3): фаза Lobby в

@@ -7,12 +7,17 @@
 -- запрещают использование вне Roblox Studio). Никаких внешних текстур/
 -- ассетов не используется - только Part, Color3 и встроенные Material.
 --
--- Карта - открытая планировка из 3 зон (Лобби / Рабочая зона / Гостиная),
--- разделённых полноценными стенами с проходом, плюс отдельная запертая
--- комната ожидания для Seekers и точка старта для зрительской камеры.
--- Крыши у комнат нет - это не оплошность (см. DECISIONS.md, п.23): дешевле
--- по производительности и даёт зрителю (SpectatorClient, вид от третьего
--- лица) обзор сверху на всю карту.
+-- Здание карты - открытая планировка из 3 зон (Холл / Рабочая зона /
+-- Гостиная), разделённых полноценными стенами с проходом, плюс точка
+-- старта для зрительской камеры. Крыши у комнат нет - это не оплошность
+-- (см. DECISIONS.md, п.23): дешевле по производительности и даёт зрителю
+-- (SpectatorClient, вид от третьего лица) обзор сверху на всю карту.
+--
+-- Отдельно от здания - парящая лобби-платформа (см. MEGA_PLAN.md, Часть 1):
+-- игроки ждут раунд, тренируют кисть/позы и выбирают роль позицией
+-- (центр = доброволец-Seeker, врата по краю = доброволец-Hider). Раньше
+-- была "земляная" зона Лобби внутри здания + отдельная запертая комната
+-- ожидания Seekers на Z=150 - обе заменены платформой.
 
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -43,6 +48,9 @@ local function newPart(props)
 	p.CFrame = props.CFrame
 	p.Name = props.Name or "Part"
 	p.Transparency = props.Transparency or 0
+	if props.Shape then
+		p.Shape = props.Shape
+	end
 	p.Parent = props.Parent
 	return p
 end
@@ -86,28 +94,24 @@ local function addFurniture(parent, name, centerX, centerZ, size, color, materia
 	})
 end
 
-local function buildLobby(parent)
+-- Раньше называлась buildLobby и сама была местом ожидания (со спавнами
+-- игроков) - теперь ожидание переехало на парящую платформу-лобби
+-- (buildLobbyPlatform, см. MEGA_PLAN.md 1.1), а эта зона осталась обычным
+-- игровым "Холлом" здания для пряток - спавнов тут больше нет, только
+-- добавлены 2 маркера HiderSpawn (см. 1.1.7).
+local function buildEntranceHall(parent)
 	local color = Color3.fromRGB(205, 205, 210)
 	addFloor(parent, -39, 0, 42, 80, color)
 
-	-- Пара скамеек - просто, чтобы Лобби не было пустой коробкой
+	-- Пара скамеек - просто, чтобы Холл не был пустой коробкой
 	addFurniture(parent, "LobbyBench", -50, -15, Vector3.new(8, 2, 3), Color3.fromRGB(90, 70, 60), Enum.Material.Wood)
 	addFurniture(parent, "LobbyBench", -50, 15, Vector3.new(8, 2, 3), Color3.fromRGB(90, 70, 60), Enum.Material.Wood)
 
-	-- Точки спавна лобби - Neutral, чтобы работали независимо от команды
-	-- игрока (роли ещё не назначены/сброшены в Spectators между раундами).
-	for i, offsetZ in ipairs({ -25, -12, 0, 12, 25, -25 }) do
-		local spawn = Instance.new("SpawnLocation")
-		spawn.Name = "LobbySpawn" .. i
-		spawn.Neutral = true
-		spawn.Anchored = true
-		spawn.CanCollide = false
-		spawn.Size = Vector3.new(6, 1, 6)
-		spawn.Color = Color3.fromRGB(90, 170, 255)
-		spawn.Material = Enum.Material.Neon
-		spawn.CFrame = CFrame.new(-52 + (i % 2) * 6, 0.5, offsetZ)
-		spawn.Parent = parent
-	end
+	-- Точки для телепорта Hiders на старте пряток (см. RoundManager.
+	-- teleportPlayersToRandomOf) - невидимые маркеры, одно и то же имя у
+	-- всех, RoundManager сам выбирает случайный на игрока.
+	newPart({ Name = "HiderSpawn", Parent = parent, Size = Vector3.new(4, 1, 4), CFrame = CFrame.new(-30, 0.5, -25), Transparency = 1, CanCollide = false })
+	newPart({ Name = "HiderSpawn", Parent = parent, Size = Vector3.new(4, 1, 4), CFrame = CFrame.new(-30, 0.5, 25), Transparency = 1, CanCollide = false })
 end
 
 local function buildWorkArea(parent)
@@ -137,6 +141,8 @@ local function buildWorkArea(parent)
 	addFurniture(parent, "Shelf", 20, -5, Vector3.new(2, 8, 10), Color3.fromRGB(140, 140, 140), Enum.Material.Wood)
 	-- X=-15 (не -20) - иначе растение попадает в зону Лобби (X < -18), а не Офиса
 	addFurniture(parent, "OfficePlant", -15, -35, Vector3.new(2, 4, 2), Color3.fromRGB(70, 150, 80), Enum.Material.Grass)
+	-- HiderSpawn для Офиса (1) - см. комментарий в buildEntranceHall выше
+	newPart({ Name = "HiderSpawn", Parent = parent, Size = Vector3.new(4, 1, 4), CFrame = CFrame.new(10, 0.5, -20), Transparency = 1, CanCollide = false })
 
 	-- === Склад (Z от 0 до 40) - разноцветные/разноразмерные ящики ===
 	local crateColors = {
@@ -155,6 +161,10 @@ local function buildWorkArea(parent)
 		end
 	end
 	addFurniture(parent, "Shelf", 20, 35, Vector3.new(2, 9, 12), Color3.fromRGB(90, 90, 90), Enum.Material.Metal)
+
+	-- HiderSpawn для Склада (2) - см. комментарий в buildEntranceHall выше
+	newPart({ Name = "HiderSpawn", Parent = parent, Size = Vector3.new(4, 1, 4), CFrame = CFrame.new(10, 0.5, 5), Transparency = 1, CanCollide = false })
+	newPart({ Name = "HiderSpawn", Parent = parent, Size = Vector3.new(4, 1, 4), CFrame = CFrame.new(-10, 0.5, 35), Transparency = 1, CanCollide = false })
 end
 
 local function buildLounge(parent)
@@ -177,6 +187,10 @@ local function buildLounge(parent)
 	end
 	addFurniture(parent, "FloorLamp", 78, -32, Vector3.new(1.2, 7, 1.2), Color3.fromRGB(230, 200, 80), Enum.Material.Neon)
 
+	-- HiderSpawn для Гостиной (2) - см. комментарий в buildEntranceHall выше
+	newPart({ Name = "HiderSpawn", Parent = parent, Size = Vector3.new(4, 1, 4), CFrame = CFrame.new(30, 0.5, -35), Transparency = 1, CanCollide = false })
+	newPart({ Name = "HiderSpawn", Parent = parent, Size = Vector3.new(4, 1, 4), CFrame = CFrame.new(70, 0.5, -20), Transparency = 1, CanCollide = false })
+
 	-- === Переговорная (Z от 0 до 40) ===
 	addFurniture(parent, "MeetingTable", 55, 20, Vector3.new(12, 2, 5), Color3.fromRGB(160, 160, 160), Enum.Material.SmoothPlastic)
 	local meetingChairColors = {
@@ -188,6 +202,9 @@ local function buildLounge(parent)
 	end
 	addFurniture(parent, "Whiteboard", 55, 38, Vector3.new(8, 5, 0.3), Color3.fromRGB(240, 240, 240), Enum.Material.SmoothPlastic)
 	addFurniture(parent, "Bookshelf", 78, 30, Vector3.new(2, 8, 8), Color3.fromRGB(120, 90, 70), Enum.Material.Wood)
+
+	-- HiderSpawn для Переговорной (1) - см. комментарий в buildEntranceHall выше
+	newPart({ Name = "HiderSpawn", Parent = parent, Size = Vector3.new(4, 1, 4), CFrame = CFrame.new(65, 0.5, 5), Transparency = 1, CanCollide = false })
 end
 
 -- Внешний периметр всего здания (одна общая коробка на все 3 зоны) плюс
@@ -215,29 +232,175 @@ local function buildOuterShellAndDoorways(parent)
 	end
 end
 
--- Отдельная запертая комната ожидания для Seekers на время фазы Hiding -
--- см. DECISIONS.md, п.9/23. Специально вынесена далеко в сторону и не
--- имеет дверей: попасть внутрь можно только телепортом
--- (RoundManager.teleportPlayersTo), выйти - только автоматически при
--- старте фазы Seeking. Имя корневой Part - контракт с RoundManager.lua
--- (findSpawnByName("SeekerWaitingRoom")).
-local function buildSeekerWaitingRoom(parent)
-	local center = Vector3.new(10, 0, 150)
+-- Лобби-платформа: парит высоко над картой и в стороне от здания (см.
+-- MEGA_PLAN.md, Часть 1). Заменяет собой старую запертую "комнату
+-- ожидания" Seekers (buildSeekerWaitingRoom, была на Z=150) - теперь на
+-- этой же платформе все игроки ждут начала раунда, тренируют кисть и
+-- позы, а Seekers остаются на ней и во время фазы Hiding (см. 1.5).
+-- Имя маркера SeekerWaitingRoom - тот же контракт с RoundManager.lua,
+-- что и раньше (findSpawnByName), просто маркер переехал сюда.
+local LOBBY_PLATFORM_CENTER = Vector3.new(12, 120, -160)
+local LOBBY_PLATFORM_RADIUS = 32 -- диаметр 64 - просторно на 24 игрока, но не пусто
+local LOBBY_SPAWN_RING_RADIUS = 18
+local LOBBY_GATE_RING_RADIUS = 26
+local LOBBY_PLATFORM_TOP_Y = LOBBY_PLATFORM_CENTER.Y + 1 -- толщина платформы 2, половина = 1
 
-	addFloor(parent, center.X, center.Z, 30, 30, Color3.fromRGB(80, 40, 40))
-	addWall(parent, center.X, center.Z - 15, 30, 1, WALL_HEIGHT, Color3.fromRGB(60, 30, 30))
-	addWall(parent, center.X, center.Z + 15, 30, 1, WALL_HEIGHT, Color3.fromRGB(60, 30, 30))
-	addWall(parent, center.X - 15, center.Z, 1, 30, WALL_HEIGHT, Color3.fromRGB(60, 30, 30))
-	addWall(parent, center.X + 15, center.Z, 1, 30, WALL_HEIGHT, Color3.fromRGB(60, 30, 30))
-	addFurniture(parent, "WaitingBench", center.X, center.Z, Vector3.new(10, 2, 3), Color3.fromRGB(90, 70, 60), Enum.Material.Wood)
+local function buildLobbyPlatform(parent)
+	-- Сама платформа - плоский цилиндр ("блин"). У цилиндра Roblox ось
+	-- лежит вдоль X, поэтому размер задаём как (толщина, диаметр, диаметр)
+	-- и поворачиваем на 90° вокруг Z, чтобы он лёг горизонтально.
+	newPart({
+		Name = "LobbyPlatform",
+		Parent = parent,
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(2, LOBBY_PLATFORM_RADIUS * 2, LOBBY_PLATFORM_RADIUS * 2),
+		CFrame = CFrame.new(LOBBY_PLATFORM_CENTER) * CFrame.Angles(0, 0, math.rad(90)),
+		Color = Color3.fromRGB(235, 235, 240),
+		Material = Enum.Material.SmoothPlastic,
+	})
 
-	-- Невидимый функциональный маркер (не часть видимой геометрии) - именно
-	-- его ищет RoundManager по имени и телепортирует Seekers к его CFrame.
+	-- Бортик (видимый) + невидимая стена - один и тот же цикл по 8
+	-- сегментам строит и то, и то (ponytail: не два отдельных цикла).
+	-- Ширина сегмента взята с запасом над хордой (~24.5 стада при радиусе
+	-- 32 и 8 сегментах), чтобы соседние сегменты перекрывались и не
+	-- оставляли щели, через которые можно провалиться.
+	local SEGMENT_COUNT = 8
+	local SEGMENT_WIDTH = 28
+	local WALL_HEIGHT_LOBBY = 20
+	for i = 0, SEGMENT_COUNT - 1 do
+		local angle = (i / SEGMENT_COUNT) * math.pi * 2
+		local segmentPos = Vector3.new(
+			LOBBY_PLATFORM_CENTER.X + math.cos(angle) * LOBBY_PLATFORM_RADIUS,
+			LOBBY_PLATFORM_TOP_Y,
+			LOBBY_PLATFORM_CENTER.Z + math.sin(angle) * LOBBY_PLATFORM_RADIUS
+		)
+		-- "Смотрит" на центр платформы - Size.X сегмента ложится по касательной
+		local lookAtCenter = Vector3.new(LOBBY_PLATFORM_CENTER.X, LOBBY_PLATFORM_TOP_Y, LOBBY_PLATFORM_CENTER.Z)
+		local segmentCFrame = CFrame.new(segmentPos, lookAtCenter)
+
+		newPart({
+			Name = "PlatformCurb",
+			Parent = parent,
+			Size = Vector3.new(SEGMENT_WIDTH, 1.5, 2),
+			CFrame = segmentCFrame * CFrame.new(0, 0.75, 0),
+			Color = Color3.fromRGB(210, 210, 215),
+		})
+
+		newPart({
+			Name = "PlatformWall",
+			Parent = parent,
+			Size = Vector3.new(SEGMENT_WIDTH, WALL_HEIGHT_LOBBY, 2),
+			CFrame = segmentCFrame * CFrame.new(0, WALL_HEIGHT_LOBBY / 2, 0),
+			Transparency = 1,
+			CanCollide = true,
+		})
+	end
+
+	-- Зона добровольного Seeker (центр платформы) - контракт имени
+	-- SeekerVolunteerZone с PlayerRoleService.getRoleIntent (см. 1.2).
+	newPart({
+		Name = "SeekerZoneGlow",
+		Parent = parent,
+		Shape = Enum.PartType.Cylinder,
+		Size = Vector3.new(0.2, 12, 12),
+		CFrame = CFrame.new(LOBBY_PLATFORM_CENTER.X, LOBBY_PLATFORM_TOP_Y + 0.1, LOBBY_PLATFORM_CENTER.Z)
+			* CFrame.Angles(0, 0, math.rad(90)),
+		Color = Color3.fromRGB(220, 90, 90),
+		Material = Enum.Material.Neon,
+		CanCollide = false,
+	})
+
+	local seekerZoneMarker = newPart({
+		Name = "SeekerVolunteerZone",
+		Parent = parent,
+		Size = Vector3.new(12, 8, 12),
+		CFrame = CFrame.new(LOBBY_PLATFORM_CENTER.X, LOBBY_PLATFORM_TOP_Y + 4, LOBBY_PLATFORM_CENTER.Z),
+		Transparency = 1,
+		CanCollide = false,
+	})
+
+	local seekerBillboard = Instance.new("BillboardGui")
+	seekerBillboard.Name = "RoleLabel"
+	seekerBillboard.Size = UDim2.new(0, 200, 0, 50)
+	seekerBillboard.StudsOffset = Vector3.new(0, 5, 0)
+	seekerBillboard.Parent = seekerZoneMarker
+
+	local seekerLabel = Instance.new("TextLabel")
+	seekerLabel.BackgroundTransparency = 1
+	seekerLabel.Size = UDim2.new(1, 0, 1, 0)
+	seekerLabel.Font = Enum.Font.GothamBold
+	seekerLabel.TextScaled = true
+	seekerLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+	seekerLabel.Text = "ХОЧУ БЫТЬ ИСКАТЕЛЕМ"
+	seekerLabel.Parent = seekerBillboard
+
+	-- 4 врат Hider по краю платформы - контракт имени HiderGateZone с
+	-- PlayerRoleService.getRoleIntent (см. 1.2). Одинаковое имя у всех
+	-- четырёх - getRoleIntent проверяет каждую по очереди.
+	local GATE_COLOR = Color3.fromRGB(90, 200, 120)
+	for i = 0, 3 do
+		local angle = (i / 4) * math.pi * 2
+		local gateX = LOBBY_PLATFORM_CENTER.X + math.cos(angle) * LOBBY_GATE_RING_RADIUS
+		local gateZ = LOBBY_PLATFORM_CENTER.Z + math.sin(angle) * LOBBY_GATE_RING_RADIUS
+
+		newPart({ Name = "HiderGatePost", Parent = parent, Size = Vector3.new(1, 6, 1), CFrame = CFrame.new(gateX - 3, LOBBY_PLATFORM_TOP_Y + 3, gateZ), Color = GATE_COLOR })
+		newPart({ Name = "HiderGatePost", Parent = parent, Size = Vector3.new(1, 6, 1), CFrame = CFrame.new(gateX + 3, LOBBY_PLATFORM_TOP_Y + 3, gateZ), Color = GATE_COLOR })
+		newPart({ Name = "HiderGateBeam", Parent = parent, Size = Vector3.new(6, 1, 1), CFrame = CFrame.new(gateX, LOBBY_PLATFORM_TOP_Y + 6, gateZ), Color = GATE_COLOR })
+
+		local gateMarker = newPart({
+			Name = "HiderGateZone",
+			Parent = parent,
+			Size = Vector3.new(8, 8, 8),
+			CFrame = CFrame.new(gateX, LOBBY_PLATFORM_TOP_Y + 4, gateZ),
+			Transparency = 1,
+			CanCollide = false,
+		})
+
+		local gateBillboard = Instance.new("BillboardGui")
+		gateBillboard.Name = "RoleLabel"
+		gateBillboard.Size = UDim2.new(0, 200, 0, 50)
+		gateBillboard.StudsOffset = Vector3.new(0, 5, 0)
+		gateBillboard.Parent = gateMarker
+
+		local gateLabel = Instance.new("TextLabel")
+		gateLabel.BackgroundTransparency = 1
+		gateLabel.Size = UDim2.new(1, 0, 1, 0)
+		gateLabel.Font = Enum.Font.GothamBold
+		gateLabel.TextScaled = true
+		gateLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+		gateLabel.Text = "ХОЧУ ПРЯТАТЬСЯ"
+		gateLabel.Parent = gateBillboard
+	end
+
+	-- Точки спавна на платформе - Neutral, чтобы работали независимо от
+	-- команды игрока (роли ещё не назначены/сброшены в Spectators между
+	-- раундами) - переехали сюда из старой buildLobby (см. buildEntranceHall).
+	for i = 1, 6 do
+		local angle = (i / 6) * math.pi * 2
+		local spawnPart = Instance.new("SpawnLocation")
+		spawnPart.Name = "LobbySpawn" .. i
+		spawnPart.Neutral = true
+		spawnPart.Anchored = true
+		spawnPart.CanCollide = false
+		spawnPart.Size = Vector3.new(6, 1, 6)
+		spawnPart.Color = Color3.fromRGB(90, 170, 255)
+		spawnPart.Material = Enum.Material.Neon
+		spawnPart.CFrame = CFrame.new(
+			LOBBY_PLATFORM_CENTER.X + math.cos(angle) * LOBBY_SPAWN_RING_RADIUS,
+			LOBBY_PLATFORM_TOP_Y + 0.5,
+			LOBBY_PLATFORM_CENTER.Z + math.sin(angle) * LOBBY_SPAWN_RING_RADIUS
+		)
+		spawnPart.Parent = parent
+	end
+
+	-- Маркер "комнаты ожидания" Seekers - контракт имени с RoundManager.lua
+	-- (findSpawnByName("SeekerWaitingRoom")), просто переехал на платформу.
+	-- Смещён от центра (X+10), чтобы не совпадать с SeekerVolunteerZone.
 	newPart({
 		Name = "SeekerWaitingRoom",
 		Parent = parent,
 		Size = Vector3.new(4, 1, 4),
-		CFrame = CFrame.new(center.X, 0.5, center.Z),
+		CFrame = CFrame.new(LOBBY_PLATFORM_CENTER.X + 10, LOBBY_PLATFORM_TOP_Y + 0.5, LOBBY_PLATFORM_CENTER.Z),
 		Transparency = 1,
 		CanCollide = false,
 	})
@@ -275,11 +438,11 @@ function MapBuilder.Build()
 	mapFolder.Name = "Map"
 	mapFolder.Parent = Workspace
 
-	buildLobby(mapFolder)
+	buildEntranceHall(mapFolder)
 	buildWorkArea(mapFolder)
 	buildLounge(mapFolder)
 	buildOuterShellAndDoorways(mapFolder)
-	buildSeekerWaitingRoom(mapFolder)
+	buildLobbyPlatform(mapFolder)
 	buildSpectatorSpawn(mapFolder)
 
 	print("[MecchaChameleon] Процедурная карта построена (MapBuilder.lua).")

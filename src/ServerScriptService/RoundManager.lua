@@ -54,8 +54,8 @@ local function waitForEnoughPlayers()
 	end
 end
 
--- Телепортирует список игроков к заданной Part (используется для "комнаты ожидания" искателей)
--- См. DECISIONS.md, п.9 - Part с именем SeekerWaitingRoom нужно создать вручную в Workspace.
+-- Телепортирует список игроков к заданной Part (используется для лобби-
+-- платформы Seekers, findSpawnByName("SeekerWaitingRoom") - см. MapBuilder.lua).
 local function teleportPlayersTo(playersList, part)
 	if not part then
 		return
@@ -68,8 +68,48 @@ local function teleportPlayersTo(playersList, part)
 	end
 end
 
+-- Как teleportPlayersTo, но для Hiders, у которых нет одной общей точки -
+-- каждому достаётся случайный маркер из списка (см. MapBuilder.
+-- HiderSpawn×8, MEGA_PLAN.md 1.1.7).
+local function teleportPlayersToRandomOf(playersList, parts)
+	if #parts == 0 then
+		return
+	end
+	for _, player in ipairs(playersList) do
+		local character = player.Character
+		if character and character:FindFirstChild("HumanoidRootPart") then
+			local part = parts[math.random(1, #parts)]
+			character.HumanoidRootPart.CFrame = part.CFrame + Vector3.new(0, 3, 0)
+		end
+	end
+end
+
+-- ВАЖНО: все маркеры MapBuilder (SeekerWaitingRoom, HiderSpawn и т.д.)
+-- лежат внутри Workspace.Map (см. MapBuilder.Build), а не прямо в
+-- Workspace - раньше здесь было Workspace:FindFirstChild(name), что НИКОГДА
+-- не находило маркер (он на уровень глубже) и teleportPlayersTo молча
+-- ничего не делал. Найдено при реализации лобби-платформы (MEGA_PLAN.md,
+-- Часть 1) - тот же паттерн поиска, что уже был в SpectatorService.lua.
 local function findSpawnByName(name)
-	return Workspace:FindFirstChild(name)
+	local mapFolder = Workspace:FindFirstChild("Map")
+	return mapFolder and mapFolder:FindFirstChild(name)
+end
+
+-- Собирает ВСЕ части с именем name внутри Workspace.Map (не GetDescendants -
+-- вся геометрия карты лежит плоско прямо в папке Map, см. MapBuilder.lua).
+local function findAllSpawnsByName(name)
+	local mapFolder = Workspace:FindFirstChild("Map")
+	if not mapFolder then
+		return {}
+	end
+
+	local result = {}
+	for _, child in ipairs(mapFolder:GetChildren()) do
+		if child.Name == name then
+			table.insert(result, child)
+		end
+	end
+	return result
 end
 
 local function setWalkable(player, canWalk)
@@ -102,6 +142,10 @@ local function runHidingPhase()
 	for _, seeker in ipairs(currentSeekers) do
 		setWalkable(seeker, false)
 	end
+
+	-- Прячущихся спускаем с лобби-платформы на карту здания - каждому
+	-- случайный маркер HiderSpawn (см. MapBuilder.lua, MEGA_PLAN.md 1.1.7).
+	teleportPlayersToRandomOf(currentHiders, findAllSpawnsByName("HiderSpawn"))
 
 	-- Прячущимся сбрасываем краску (стираем мазки прошлого раунда) и разрешаем
 	-- красить/двигаться
