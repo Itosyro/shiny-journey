@@ -35,7 +35,6 @@ function RoundUIClient.Init(remotesFolder)
 	local roundStateRemote = remotesFolder:WaitForChild("RoundStateChanged")
 	local timerRemote = remotesFolder:WaitForChild("RoundTimerTick")
 	local caughtRemote = remotesFolder:WaitForChild("PlayerCaught")
-	local resultsRemote = remotesFolder:WaitForChild("RoundResults")
 	local missedPointRemote = remotesFolder:WaitForChild("MissedPointRankingUpdate")
 
 	local currentPhase = "Lobby"
@@ -96,10 +95,6 @@ function RoundUIClient.Init(remotesFolder)
 		else
 			hud.SetFoundText(string.format("Найден: %s (искателем %s). Осталось: %d", hiderName, seekerName, remainingCount))
 		end
-	end)
-
-	resultsRemote.OnClientEvent:Connect(function(results)
-		resultsUI.Show(results)
 	end)
 
 	-- Личный фидбек Missed Point Ranking (см. DECISIONS.md, п.22) - сервер

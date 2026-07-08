@@ -15,7 +15,9 @@ local REMOTE_EVENT_NAMES = {
 	"RoundStateChanged",  -- сервер -> клиент: началась новая фаза раунда
 	"RoundTimerTick",     -- сервер -> клиент: обновление таймера каждую секунду
 	"PlayerCaught",       -- сервер -> клиент: игрока поймали
-	"RoundResults",       -- сервер -> клиент: итоги раунда (очки)
+	-- Итоги раунда едут внутри extra.results события RoundStateChanged -
+	-- отдельного RemoteEvent для этого не заводим (было "RoundResults",
+	-- убрано как дублирующий путь доставки, см. AUDIT_FABLE5.md, S3).
 	"InkUpdate",          -- сервер -> клиент: обновление количества "чернил" кисти
 	"HideCatchPromptsFromHiders", -- сервер -> клиент (только Hiders): локально скрыть подсказки "Поймать"
 	"RequestWhistle",         -- клиент -> сервер: свистнуть прямо сейчас (см. DECISIONS.md, п.15)

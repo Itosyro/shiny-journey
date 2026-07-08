@@ -190,8 +190,10 @@ local function runRoundEnd()
 	services.CatchService.EndRound()
 	services.WhistleService.EndRound()
 
+	-- Итоги едут внутри extra.results того же RoundStateChanged - отдельный
+	-- RoundResults:FireAllClients был лишним вторым путём доставки одних и
+	-- тех же данных (см. AUDIT_FABLE5.md, S3).
 	broadcastState("RoundEnd", GameConfig.ROUND_END_DISPLAY_DURATION, { results = results })
-	remotesRef.RoundResults:FireAllClients(results)
 
 	runTimer(GameConfig.ROUND_END_DISPLAY_DURATION)
 

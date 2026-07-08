@@ -3,6 +3,17 @@
 Журнал изменений по датам. Ведётся, чтобы можно было продолжить работу в
 любой новой сессии (или с другой нейросетью) без потери контекста.
 
+## 2026-07-08 — Фикс S3: экран итогов не строится дважды
+
+Третья задача из `TASKS.md` Раздела A3. Итоги раунда доставлялись двумя
+путями одновременно - через `extra.results` в `RoundStateChanged` и
+через отдельный `RoundResults:FireAllClients` - оба вызывали
+`resultsUI.Show(results)`. Убран второй, лишний путь:
+`RoundManager.runRoundEnd` больше не шлёт `RoundResults`, `RoundUIClient.
+lua` лишился обработчика `resultsRemote`, имя "RoundResults" убрано из
+`RemotesSetup.lua`. Следующая задача — S4 (line-of-sight блокируется
+третьим игроком).
+
 ## 2026-07-08 — Фикс S2: убраны три копии isHider()
 
 Вторая задача из `TASKS.md` Раздела A3. `PaintService.lua`,

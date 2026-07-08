@@ -85,12 +85,11 @@ Claude Fable 5 (все 33 .lua-файла построчно). Полный от
   на `RoleUtil.IsHider(player)`; заодно убран ставший ненужным
   `Teams`-сервис в этих трёх файлах. ✅ Исправлено.
   ✔ `grep "local function isHider" src/ServerScriptService` пуст.
-- [ ] **(S3)** Экран итогов строится дважды за RoundEnd. Убрать ОДИН из
-  двух путей доставки результатов: рекомендация — удалить
+- [x] **(S3)** Экран итогов строится дважды за RoundEnd. Удалён
   `remotesRef.RoundResults:FireAllClients(results)` из
   `RoundManager.runRoundEnd`, обработчик `resultsRemote` из
   `RoundUIClient.lua` и имя "RoundResults" из `RemotesSetup.lua`
-  (extra.results в RoundStateChanged уже несёт всё то же).
+  (extra.results в RoundStateChanged уже несёт всё то же). ✅ Исправлено.
   ✔ Show() экрана итогов вызывается один раз за конец раунда.
 - [ ] **(S4)** Line-of-sight блокируется телом третьего игрока (ложный
   отказ поимки). `LineOfSightUtil.HasLineOfSight`: исключать из raycast
