@@ -159,12 +159,13 @@ local function onPaintStroke(player, points, brushColor, brushSize)
 		return
 	end
 
-	if not RoleUtil.IsHider(player) then
-		return -- красить может только Hider
-	end
-
-	if RoundManager.State ~= "Hiding" then
-		return -- красить можно только в фазу пряток
+	-- В лобби (на платформе, см. MEGA_PLAN.md 1.3) красить может ЛЮБОЙ
+	-- игрок - это тренировка кисти, роли ещё не розданы (все в команде
+	-- Spectators). В самом раунде - только Hider, и только в фазу пряток.
+	local canPaintNow = RoundManager.State == "Lobby"
+		or (RoundManager.State == "Hiding" and RoleUtil.IsHider(player))
+	if not canPaintNow then
+		return
 	end
 
 	if isPaintingBlocked(player) then
@@ -224,6 +225,14 @@ function PaintService.Init(remotes)
 		inkData[player] = nil
 		paintingBlocked[player] = nil
 		activeStamps[player] = nil -- сами инстансы Texture уничтожатся вместе с персонажем
+	end)
+
+	-- Игрок может красить прямо в лобби (тренировка кисти на платформе,
+	-- см. MEGA_PLAN.md 1.3) - без этого inkData появлялась бы только в
+	-- начале фазы пряток (ResetForNewRound), и полоска чернил у только что
+	-- зашедшего была бы пустой/несуществующей.
+	Players.PlayerAdded:Connect(function(player)
+		PaintService.ClearAllPaint(player)
 	end)
 
 	task.spawn(rechargeLoop)

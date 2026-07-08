@@ -278,6 +278,14 @@ local function gameLoop()
 				services.SpectatorService.ExitSpectator(player)
 			end
 
+			-- Поза доступна прямо в лобби для тренировки (MEGA_PLAN.md 1.3) -
+			-- без этого игрок мог бы войти в раунд всё ещё замороженным с
+			-- платформы (unfreeze раньше делался только в конце раунда, лобби
+			-- он не покрывал).
+			for _, player in ipairs(getAvailablePlayers()) do
+				services.FreezeService.ForceUnfreeze(player)
+			end
+
 			-- Оборачиваем раунд в pcall: если внутри фазы случится ошибка, весь игровой
 			-- цикл не должен умереть навсегда (иначе сервер зависнет без раундов).
 			-- При ошибке делаем аварийную уборку и возвращаемся в лобби.

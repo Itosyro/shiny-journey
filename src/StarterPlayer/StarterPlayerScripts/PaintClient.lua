@@ -274,7 +274,11 @@ function PaintClient.Init(remotesFolder)
 	})
 
 	local function updatePanelAvailability()
-		local available = RoleUtil.IsHider(player) and currentPhase == "Hiding"
+		-- В лобби (на платформе, см. MEGA_PLAN.md 1.3) красить может ЛЮБОЙ
+		-- игрок - тренировка кисти, роли ещё не розданы. В раунде - только
+		-- Hider, и только в фазу пряток (зеркалит серверную проверку в
+		-- PaintService.onPaintStroke).
+		local available = currentPhase == "Lobby" or (RoleUtil.IsHider(player) and currentPhase == "Hiding")
 		paletteUI.Root.Visible = available
 		brushControlsUI.Root.Visible = available
 		inkLabel.Visible = available

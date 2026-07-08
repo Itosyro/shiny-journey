@@ -19,14 +19,16 @@ local currentPhase = "Lobby"
 local freezeRemote
 
 local function updatePanelAvailability(panel)
-	-- Панель доступна ТОЛЬКО в фазе Hiding (см. требование задачи) - полностью
-	-- скрываем её в остальных фазах и для Seekers. Полное скрытие, а не просто
-	-- затемнение: Frame.Active не блокирует клики по дочерним кнопкам (в отличие
+	-- Панель доступна в фазе Hiding для Hiders (см. требование задачи), ПЛЮС
+	-- в лобби (на платформе, см. MEGA_PLAN.md 1.3) - там доступна ЛЮБОМУ
+	-- игроку как тренировка пресетов, роли ещё не розданы. В остальных
+	-- случаях полностью скрываем её. Полное скрытие, а не просто затемнение:
+	-- Frame.Active не блокирует клики по дочерним кнопкам (в отличие
 	-- от TextButton.Active у старой одиночной кнопки), поэтому только Visible
 	-- надёжно защищает от нажатий, когда переключать позу нельзя. Это лишь
 	-- клиентское зеркало серверного ограничения в FreezeService.onRequestFreeze
 	-- (см. DECISIONS.md, п.13) - даже обойдя клиент, сервер всё равно откажет.
-	panel.Root.Visible = RoleUtil.IsHider(player) and currentPhase == "Hiding"
+	panel.Root.Visible = currentPhase == "Lobby" or (RoleUtil.IsHider(player) and currentPhase == "Hiding")
 end
 
 function FreezeClient.Init(remotesFolder)

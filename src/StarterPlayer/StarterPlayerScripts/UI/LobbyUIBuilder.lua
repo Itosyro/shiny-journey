@@ -13,9 +13,11 @@ local ERROR_COLOR = Color3.fromRGB(255, 90, 90)
 function LobbyUIBuilder.Create(screenGui, options)
 	local root = Instance.new("Frame")
 	root.Name = "LobbyPanel"
-	root.AnchorPoint = Vector2.new(0.5, 0.5)
-	root.Position = UDim2.new(0.5, 0, 0.5, 0)
-	root.Size = UDim2.new(0, 340, 0, 420)
+	-- Правый верхний угол, компактнее - раньше панель по центру экрана
+	-- перекрывала бы покрасочную камеру лобби (см. MEGA_PLAN.md 1.3.6).
+	root.AnchorPoint = Vector2.new(1, 0)
+	root.Position = UDim2.new(1, -10, 0, 10)
+	root.Size = UDim2.new(0, 280, 0, 330)
 	root.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
 	root.BackgroundTransparency = 0.1
 	root.Visible = false
@@ -49,7 +51,7 @@ function LobbyUIBuilder.Create(screenGui, options)
 	local scrollFrame = Instance.new("ScrollingFrame")
 	scrollFrame.Name = "PlayerList"
 	scrollFrame.BackgroundTransparency = 1
-	scrollFrame.Size = UDim2.new(1, -20, 0, 220)
+	scrollFrame.Size = UDim2.new(1, -20, 0, 150)
 	scrollFrame.Position = UDim2.new(0, 10, 0, 68)
 	scrollFrame.ScrollBarThickness = 6
 	scrollFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
