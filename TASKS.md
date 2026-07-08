@@ -91,11 +91,12 @@ Claude Fable 5 (все 33 .lua-файла построчно). Полный от
   `RoundUIClient.lua` и имя "RoundResults" из `RemotesSetup.lua`
   (extra.results в RoundStateChanged уже несёт всё то же). ✅ Исправлено.
   ✔ Show() экрана итогов вызывается один раз за конец раунда.
-- [ ] **(S4)** Line-of-sight блокируется телом третьего игрока (ложный
-  отказ поимки). `LineOfSightUtil.HasLineOfSight`: исключать из raycast
-  персонажей ВСЕХ игроков, не только двух; для цикла Missed Point
-  Ranking собирать список один раз на тик (опциональный параметр).
-  Подробности — S4 в `AUDIT_FABLE5.md`.
+- [x] **(S4)** Line-of-sight блокируется телом третьего игрока (ложный
+  отказ поимки). `LineOfSightUtil.HasLineOfSight` теперь принимает
+  опциональный `precomputedParams` и по умолчанию исключает из raycast
+  персонажей ВСЕХ игроков (новая `BuildAllCharactersRaycastParams`), не
+  только двух; `ScoreService.missedPointWatchLoop` собирает список один
+  раз на тик и передаёт готовым. ✅ Исправлено.
   ✔ Поимка работает, когда между Seeker и Hider стоит третий игрок.
 - [ ] **(S5)** Длина пароля приватной комнаты считается в байтах (для
   кириллицы минимум фактически 2 символа). `PrivateRoomService.lua`:

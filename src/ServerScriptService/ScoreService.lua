@@ -132,12 +132,16 @@ local function missedPointWatchLoop(myToken)
 				end
 			end
 
+			-- Один набор параметров raycast на весь тик (все пары Hider×Seeker),
+			-- а не пересборка Players:GetPlayers() на каждую отдельную пару.
+			local raycastParams = LineOfSightUtil.BuildAllCharactersRaycastParams()
+
 			for _, hider in ipairs(Players:GetPlayers()) do
 				if hider.Team == hidersTeam and not CatchService.IsFound(hider) then
 					local spotted = false
 					for _, seeker in ipairs(seekers) do
 						if LineOfSightUtil.IsWithinDistance(seeker, hider, GameConfig.MISSED_POINT_MAX_DISTANCE)
-							and LineOfSightUtil.HasLineOfSight(seeker, hider) then
+							and LineOfSightUtil.HasLineOfSight(seeker, hider, raycastParams) then
 							spotted = true
 							break
 						end
