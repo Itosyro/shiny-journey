@@ -1,0 +1,14 @@
+# Roblox / Rojo
+*.rbxl
+*.rbxlx
+*.rbxm
+*.rbxmx
+sourcemap.json
+*.lock
+
+# OS / редакторы
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
